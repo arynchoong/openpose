@@ -25,6 +25,8 @@ namespace op
                 return PoseModel::BODY_19;
             else if (poseModeString == "BODY_23")
                 return PoseModel::BODY_23;
+            else if (poseModeString == "BODY_59")
+                return PoseModel::BODY_59;
             // else
             error("String does not correspond to any model (COCO, MPI, MPI_4_layers)",
                   __LINE__, __FUNCTION__, __FILE__);
@@ -77,9 +79,11 @@ namespace op
                 return ScaleMode::ZeroToOne;
             else if (heatMapScale == 2)
                 return ScaleMode::UnsignedChar;
+            else if (heatMapScale == 3)
+                return ScaleMode::NoScale;
             // else
-            const std::string message = "Integer does not correspond to any scale mode: (0, 1, 2) for"
-                                        " (PlusMinusOne, ZeroToOne, UnsignedChar).";
+            const std::string message = "Integer does not correspond to any scale mode: (0, 1, 2, 3) for"
+                                        " (PlusMinusOne, ZeroToOne, UnsignedChar, NoScale).";
             error(message, __LINE__, __FUNCTION__, __FILE__);
             return ScaleMode::PlusMinusOne;
         }
@@ -206,12 +210,25 @@ namespace op
     {
         try
         {
-            if (renderFlag == -1 && renderPoseFlag != -2)
+            // Body: to auto-pick CPU/GPU depending on CPU_ONLY/CUDA
+            if (renderFlag == -1 && renderPoseFlag == -2)
+            {
+                #ifdef USE_CUDA
+                    return RenderMode::Gpu;
+                #else
+                    return RenderMode::Cpu;
+                #endif
+            }
+            // Face and hand: to pick same than body
+            else if (renderFlag == -1 && renderPoseFlag != -2)
                 return flagsToRenderMode(renderPoseFlag, -2);
+            // No render
             else if (renderFlag == 0)
                 return RenderMode::None;
+            // CPU render
             else if (renderFlag == 1)
                 return RenderMode::Cpu;
+            // GPU render
             else if (renderFlag == 2)
                 return RenderMode::Gpu;
             // else

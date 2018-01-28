@@ -34,7 +34,6 @@ namespace op
             std::vector<boost::shared_ptr<caffe::Blob<float>>> spCaffeNetOutputBlobs;
             std::shared_ptr<caffe::Blob<float>> spHeatMapsBlob;
             std::shared_ptr<caffe::Blob<float>> spPeaksBlob;
-            std::shared_ptr<caffe::Blob<float>> spPoseBlob;
 
             ImplPoseExtractorCaffe(const PoseModel poseModel, const int gpuId,
                                    const std::string& modelFolder, const bool enableGoogleLogging) :
@@ -75,20 +74,21 @@ namespace op
                                               std::vector<boost::shared_ptr<caffe::Blob<float>>>& caffeNetOutputBlob,
                                               std::shared_ptr<caffe::Blob<float>>& heatMapsBlob,
                                               std::shared_ptr<caffe::Blob<float>>& peaksBlob,
-                                              std::shared_ptr<caffe::Blob<float>>& poseBlob,
                                               const float scaleInputToNetInput,
                                               const PoseModel poseModel)
         {
             try
             {
                 // HeatMaps extractor blob and layer
+                // Caffe modifies bottom - Heatmap gets resized
                 const auto caffeNetOutputBlobs = caffeNetSharedToPtr(caffeNetOutputBlob);
                 resizeAndMergeCaffe->Reshape(caffeNetOutputBlobs, {heatMapsBlob.get()},
-                                             POSE_CCN_DECREASE_FACTOR[(int)poseModel], 1.f/scaleInputToNetInput);
+                                             getPoseNetDecreaseFactor(poseModel), 1.f/scaleInputToNetInput);
                 // Pose extractor blob and layer
-                nmsCaffe->Reshape({heatMapsBlob.get()}, {peaksBlob.get()}, POSE_MAX_PEAKS[(int)poseModel]);
+                nmsCaffe->Reshape({heatMapsBlob.get()}, {peaksBlob.get()}, getPoseMaxPeaks(poseModel),
+                                  getPoseNumberBodyParts(poseModel));
                 // Pose extractor blob and layer
-                bodyPartConnectorCaffe->Reshape({heatMapsBlob.get(), peaksBlob.get()}, {poseBlob.get()});
+                bodyPartConnectorCaffe->Reshape({heatMapsBlob.get(), peaksBlob.get()});
                 // Cuda check
                 #ifdef USE_CUDA
                     cudaCheck(__LINE__, __FUNCTION__, __FILE__);
@@ -101,16 +101,16 @@ namespace op
         }
 
         void addCaffeNetOnThread(std::vector<std::shared_ptr<NetCaffe>>& netCaffe,
-                         std::vector<boost::shared_ptr<caffe::Blob<float>>>& caffeNetOutputBlob,
-                         const PoseModel poseModel, const int gpuId,
-                         const std::string& modelFolder, const bool enableGoogleLogging)
+                                 std::vector<boost::shared_ptr<caffe::Blob<float>>>& caffeNetOutputBlob,
+                                 const PoseModel poseModel, const int gpuId,
+                                 const std::string& modelFolder, const bool enableGoogleLogging)
         {
             try
             {
                 // Add Caffe Net
                 netCaffe.emplace_back(
-                    std::make_shared<NetCaffe>(modelFolder + POSE_PROTOTXT[(int)poseModel],
-                                               modelFolder + POSE_TRAINED_MODEL[(int)poseModel],
+                    std::make_shared<NetCaffe>(modelFolder + getPoseProtoTxt(poseModel),
+                                               modelFolder + getPoseTrainedModel(poseModel),
                                                gpuId, enableGoogleLogging)
                 );
                 // Initializing them on the thread
@@ -133,8 +133,9 @@ namespace op
 
     PoseExtractorCaffe::PoseExtractorCaffe(const PoseModel poseModel, const std::string& modelFolder,
                                            const int gpuId, const std::vector<HeatMapType>& heatMapTypes,
-                                           const ScaleMode heatMapScale, const bool enableGoogleLogging) :
-        PoseExtractor{poseModel, heatMapTypes, heatMapScale}
+                                           const ScaleMode heatMapScale, const bool addPartCandidates,
+                                           const bool enableGoogleLogging) :
+        PoseExtractor{poseModel, heatMapTypes, heatMapScale, addPartCandidates}
         #ifdef USE_CAFFE
         , upImpl{new ImplPoseExtractorCaffe{poseModel, gpuId, modelFolder, enableGoogleLogging}}
         #endif
@@ -150,6 +151,7 @@ namespace op
                 UNUSED(gpuId);
                 UNUSED(heatMapTypes);
                 UNUSED(heatMapScale);
+                UNUSED(addPartCandidates);
                 error("OpenPose must be compiled with the `USE_CAFFE` macro definition in order to use this"
                       " functionality.", __LINE__, __FUNCTION__, __FILE__);
             #endif
@@ -180,7 +182,6 @@ namespace op
                 // Initialize blobs
                 upImpl->spHeatMapsBlob = {std::make_shared<caffe::Blob<float>>(1,1,1,1)};
                 upImpl->spPeaksBlob = {std::make_shared<caffe::Blob<float>>(1,1,1,1)};
-                upImpl->spPoseBlob = {std::make_shared<caffe::Blob<float>>(1,1,1,1)};
                 #ifdef USE_CUDA
                     cudaCheck(__LINE__, __FUNCTION__, __FILE__);
                 #endif
@@ -227,6 +228,7 @@ namespace op
                     // Reshape blobs if required
                     // Note: In order to resize to input size to have same results as Matlab, uncomment the commented
                     // lines
+                    // Note: For dynamic sizes (e.g. a folder with images of different aspect ratio)
                     if (!vectorsAreEqual(upImpl->mNetInput4DSizes.at(i), inputNetData[i].getSize()))
                         // || !vectorsAreEqual(upImpl->mScaleInputToNetInputs, scaleInputToNetInputs))
                     {
@@ -236,7 +238,7 @@ namespace op
                         // upImpl->mScaleInputToNetInputs = scaleInputToNetInputs;
                         reshapePoseExtractorCaffe(upImpl->spResizeAndMergeCaffe, upImpl->spNmsCaffe,
                                                   upImpl->spBodyPartConnectorCaffe, upImpl->spCaffeNetOutputBlobs,
-                                                  upImpl->spHeatMapsBlob, upImpl->spPeaksBlob, upImpl->spPoseBlob,
+                                                  upImpl->spHeatMapsBlob, upImpl->spPeaksBlob,
                                                   1.f, mPoseModel);
                                                   // scaleInputToNetInputs[i], mPoseModel);
                     }
@@ -247,11 +249,9 @@ namespace op
                 const std::vector<float> floatScaleRatios(scaleInputToNetInputs.begin(), scaleInputToNetInputs.end());
                 upImpl->spResizeAndMergeCaffe->setScaleRatios(floatScaleRatios);
                 #ifdef USE_CUDA
-                    upImpl->spResizeAndMergeCaffe->Forward_gpu(caffeNetOutputBlobs,                             // ~5ms
-                                                               {upImpl->spHeatMapsBlob.get()});
-                    cudaCheck(__LINE__, __FUNCTION__, __FILE__);
+                    upImpl->spResizeAndMergeCaffe->Forward_gpu(caffeNetOutputBlobs, {upImpl->spHeatMapsBlob.get()}); // ~5ms
                 #else
-                    error("ResizeAndMergeCaffe CPU version not implemented yet.", __LINE__, __FUNCTION__, __FILE__);
+                    upImpl->spResizeAndMergeCaffe->Forward_cpu(caffeNetOutputBlobs, {upImpl->spHeatMapsBlob.get()}); // ~20ms
                 #endif
 
                 // 3. Get peaks by Non-Maximum Suppression
@@ -260,7 +260,7 @@ namespace op
                     upImpl->spNmsCaffe->Forward_gpu({upImpl->spHeatMapsBlob.get()}, {upImpl->spPeaksBlob.get()});// ~2ms
                     cudaCheck(__LINE__, __FUNCTION__, __FILE__);
                 #else
-                    error("NmsCaffe CPU version not implemented yet.", __LINE__, __FUNCTION__, __FILE__);
+                    upImpl->spNmsCaffe->Forward_cpu({upImpl->spHeatMapsBlob.get()}, {upImpl->spPeaksBlob.get()}); // ~ 7ms
                 #endif
 
                 // Get scale net to output (i.e. image input)
@@ -300,6 +300,42 @@ namespace op
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
+    }
+
+    const float* PoseExtractorCaffe::getCandidatesCpuConstPtr() const
+    {
+        try
+        {
+            #ifdef USE_CAFFE
+                checkThread();
+                return upImpl->spPeaksBlob->cpu_data();
+            #else
+                return nullptr;
+            #endif
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return nullptr;
+        }
+    }
+
+    const float* PoseExtractorCaffe::getCandidatesGpuConstPtr() const
+    {
+        try
+        {
+            #ifdef USE_CAFFE
+                checkThread();
+                return upImpl->spPeaksBlob->gpu_data();
+            #else
+                return nullptr;
+            #endif
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return nullptr;
         }
     }
 
@@ -364,7 +400,7 @@ namespace op
             #ifdef USE_CAFFE
                 error("GPU pointer for people pose data not implemented yet.", __LINE__, __FUNCTION__, __FILE__);
                 checkThread();
-                return upImpl->spPoseBlob->gpu_data();
+                return nullptr;
             #else
                 return nullptr;
             #endif

@@ -14,7 +14,7 @@ namespace op
     // Example to read it in Python, assuming a (18 x 300 x 500) size Array
     // x = np.fromfile(heatMapFullPath, dtype=np.float32)
     // assert x[0] == 3 # First parameter saves the number of dimensions (18x300x500 = 3 dimensions)
-    // shape_x = x[1:x[0]]
+    // shape_x = x[1:1+int(x[0])]
     // assert len(shape_x[0]) == 3 # Number of dimensions
     // assert shape_x[0] == 18 # Size of the first dimension
     // assert shape_x[1] == 300 # Size of the second dimension
@@ -36,12 +36,15 @@ namespace op
                             const DataFormat format);
 
     // Json - Saving as *.json not available in OpenCV verions < 3.0, this function is a quick fix
-    OP_API void saveKeypointsJson(const Array<float>& keypoints, const std::string& keypointName,
-                                  const std::string& fileName, const bool humanReadable);
+    OP_API void savePeopleJson(const Array<float>& keypoints,
+                               const std::vector<std::vector<std::array<float,3>>>& candidates,
+                               const std::string& keypointName, const std::string& fileName,
+                               const bool humanReadable);
 
     // It will save a bunch of Array<float> elements
-    OP_API void saveKeypointsJson(const std::vector<std::pair<Array<float>, std::string>>& keypointVector,
-                                  const std::string& fileName, const bool humanReadable);
+    OP_API void savePeopleJson(const std::vector<std::pair<Array<float>, std::string>>& keypointVector,
+                               const std::vector<std::vector<std::array<float,3>>>& candidates,
+                               const std::string& fileName, const bool humanReadable);
 
     // Save/load image
     OP_API void saveImage(const cv::Mat& cvMat, const std::string& fullFilePath,

@@ -27,19 +27,17 @@ OpenPose represents the **first real-time multi-person system to jointly detect 
 
 
 
-## Latest News
+## Latest Features
 - Sep 2017: **CMake** installer and **IP camera** support!
 - Jul 2017: [**Windows portable demo**](doc/installation.md#installation---demo)!
 - Jul 2017: **Hands** released!
 - Jun 2017: **Face** released!
-- May 2017: **Windows** version!
-- Apr 2017: **Body** released!
-- Check all the [release notes](doc/release_notes.md).
+For further details, check [all released features](doc/released_features.md) and [release notes](doc/release_notes.md).
 
 
 
 ## Contents
-1. [Latest News](#latest-news)
+1. [Latest Features](#latest-features)
 2. [Results](#results)
 3. [Installation, Reinstallation and Uninstallation](#installation-reinstallation-and-uninstallation)
 4. [Quick Start](#quick-start)
@@ -106,7 +104,7 @@ Output (format, keypoint index ordering, etc.) in [doc/output.md](doc/output.md)
 
 
 ## Speeding Up OpenPose and Benchmark
-Check the OpenPose Benchmark and some hints to speed up OpenPose on [doc/installation.md#faq](doc/installation.md#faq).
+Check the OpenPose Benchmark and some hints to speed up OpenPose on [doc/faq.md#speed-up-and-benchmark](doc/faq.md#speed-up-and-benchmark).
 
 
 
@@ -125,7 +123,7 @@ Just comment on GitHub or make a pull request and we will answer as soon as poss
 
 
 ## Authors and Contributors
-OpenPose is authored by [Gines Hidalgo](https://www.gineshidalgo.com/), [Zhe Cao](http://www.andrew.cmu.edu/user/zhecao), [Tomas Simon](http://www.cs.cmu.edu/~tsimon/), [Shih-En Wei](https://scholar.google.com/citations?user=sFQD3k4AAAAJ&hl=en), [Hanbyul Joo](http://www.cs.cmu.edu/~hanbyulj/), and [Yaser Sheikh](http://www.cs.cmu.edu/~yaser/). Currently, it is being maintained by [Gines Hidalgo](https://www.gineshidalgo.com/) and [Bikramjot Hanzra](https://www.linkedin.com/in/bikz05). The [original CVPR 2017 repo](https://github.com/ZheC/Multi-Person-Pose-Estimation) includes Matlab and Python versions, as well as the training code. The body pose estimation work is based on [the original ECCV 2016 demo](https://github.com/CMU-Perceptual-Computing-Lab/caffe_rtpose).
+OpenPose is authored by [Gines Hidalgo](https://www.gineshidalgo.com/), [Zhe Cao](http://www.andrew.cmu.edu/user/zhecao), [Tomas Simon](http://www.cs.cmu.edu/~tsimon/), [Shih-En Wei](https://scholar.google.com/citations?user=sFQD3k4AAAAJ&hl=en), [Hanbyul Joo](http://www.cs.cmu.edu/~hanbyulj/), and [Yaser Sheikh](http://www.cs.cmu.edu/~yaser/). Currently, it is being maintained by [Gines Hidalgo](https://www.gineshidalgo.com/), [Bikramjot Hanzra](https://www.linkedin.com/in/bikz05), and [Yaadhav Raaj](https://www.linkedin.com/in/yaadhavraaj). The [original CVPR 2017 repo](https://github.com/ZheC/Multi-Person-Pose-Estimation) includes Matlab and Python versions, as well as the training code. The body pose estimation work is based on [the original ECCV 2016 demo](https://github.com/CMU-Perceptual-Computing-Lab/caffe_rtpose).
 
 In addition, OpenPose would not be possible without the [CMU Panoptic Studio dataset](http://domedb.perception.cs.cmu.edu/).
 
