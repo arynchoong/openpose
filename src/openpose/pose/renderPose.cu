@@ -1,6 +1,6 @@
+#include <openpose/gpu/cuda.hpp>
+#include <openpose/gpu/cuda.hu>
 #include <openpose/pose/poseParameters.hpp>
-#include <openpose/utilities/cuda.hpp>
-#include <openpose/utilities/cuda.hu>
 #include <openpose/utilities/render.hu>
 #include <openpose/pose/renderPose.hpp>
 
@@ -455,7 +455,7 @@ namespace op
                         framePtr, frameSize.x, frameSize.y, posePtr, numberPeople, renderThreshold, googlyEyes,
                         blendOriginalFrame, alphaBlending
                     );
-                else if (poseModel == PoseModel::BODY_19)
+                else if (poseModel == PoseModel::BODY_19 || poseModel == PoseModel::BODY_19_X2)
                     renderPoseBody19<<<threadsPerBlock, numBlocks>>>(
                         framePtr, frameSize.x, frameSize.y, posePtr, numberPeople, renderThreshold, googlyEyes,
                         blendOriginalFrame, alphaBlending

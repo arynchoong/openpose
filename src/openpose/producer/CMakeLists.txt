@@ -1,8 +1,10 @@
 set(SOURCES_OP_PRODUCER
     defineTemplates.cpp
+    flirReader.cpp
     imageDirectoryReader.cpp
     ipCameraReader.cpp
     producer.cpp
+    spinnakerWrapper.cpp
     videoCaptureReader.cpp
     videoReader.cpp
     webcamReader.cpp)

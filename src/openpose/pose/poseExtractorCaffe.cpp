@@ -4,10 +4,10 @@
 #include <openpose/core/netCaffe.hpp>
 #include <openpose/core/nmsCaffe.hpp>
 #include <openpose/core/resizeAndMergeCaffe.hpp>
+#include <openpose/gpu/cuda.hpp>
 #include <openpose/pose/bodyPartConnectorCaffe.hpp>
 #include <openpose/pose/poseParameters.hpp>
 #include <openpose/utilities/check.hpp>
-#include <openpose/utilities/cuda.hpp>
 #include <openpose/utilities/fastMath.hpp>
 #include <openpose/utilities/openCv.hpp>
 #include <openpose/utilities/standard.hpp>
@@ -144,7 +144,7 @@ namespace op
         {
             #ifdef USE_CAFFE
                 // Layers parameters
-                upImpl->spBodyPartConnectorCaffe->setPoseModel(mPoseModel);
+                upImpl->spBodyPartConnectorCaffe->setPoseModel(upImpl->mPoseModel);
             #else
                 UNUSED(poseModel);
                 UNUSED(modelFolder);
@@ -239,8 +239,8 @@ namespace op
                         reshapePoseExtractorCaffe(upImpl->spResizeAndMergeCaffe, upImpl->spNmsCaffe,
                                                   upImpl->spBodyPartConnectorCaffe, upImpl->spCaffeNetOutputBlobs,
                                                   upImpl->spHeatMapsBlob, upImpl->spPeaksBlob,
-                                                  1.f, mPoseModel);
-                                                  // scaleInputToNetInputs[i], mPoseModel);
+                                                  1.f, upImpl->mPoseModel);
+                                                  // scaleInputToNetInputs[i], upImpl->mPoseModel);
                     }
                 }
 
