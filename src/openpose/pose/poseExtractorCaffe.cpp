@@ -1,10 +1,10 @@
 #ifdef USE_CAFFE
     #include <caffe/blob.hpp>
 #endif
-#include <openpose/core/netCaffe.hpp>
-#include <openpose/core/nmsCaffe.hpp>
-#include <openpose/core/resizeAndMergeCaffe.hpp>
 #include <openpose/gpu/cuda.hpp>
+#include <openpose/net/netCaffe.hpp>
+#include <openpose/net/nmsCaffe.hpp>
+#include <openpose/net/resizeAndMergeCaffe.hpp>
 #include <openpose/pose/bodyPartConnectorCaffe.hpp>
 #include <openpose/pose/poseParameters.hpp>
 #include <openpose/utilities/check.hpp>
@@ -75,7 +75,8 @@ namespace op
                                               std::shared_ptr<caffe::Blob<float>>& heatMapsBlob,
                                               std::shared_ptr<caffe::Blob<float>>& peaksBlob,
                                               const float scaleInputToNetInput,
-                                              const PoseModel poseModel)
+                                              const PoseModel poseModel,
+                                              const int gpuID)
         {
             try
             {
@@ -83,10 +84,11 @@ namespace op
                 // Caffe modifies bottom - Heatmap gets resized
                 const auto caffeNetOutputBlobs = caffeNetSharedToPtr(caffeNetOutputBlob);
                 resizeAndMergeCaffe->Reshape(caffeNetOutputBlobs, {heatMapsBlob.get()},
-                                             getPoseNetDecreaseFactor(poseModel), 1.f/scaleInputToNetInput);
+                                             getPoseNetDecreaseFactor(poseModel), 1.f/scaleInputToNetInput, true,
+                                             gpuID);
                 // Pose extractor blob and layer
                 nmsCaffe->Reshape({heatMapsBlob.get()}, {peaksBlob.get()}, getPoseMaxPeaks(poseModel),
-                                  getPoseNumberBodyParts(poseModel));
+                                  getPoseNumberBodyParts(poseModel), gpuID);
                 // Pose extractor blob and layer
                 bodyPartConnectorCaffe->Reshape({heatMapsBlob.get(), peaksBlob.get()});
                 // Cuda check
@@ -239,7 +241,7 @@ namespace op
                         reshapePoseExtractorCaffe(upImpl->spResizeAndMergeCaffe, upImpl->spNmsCaffe,
                                                   upImpl->spBodyPartConnectorCaffe, upImpl->spCaffeNetOutputBlobs,
                                                   upImpl->spHeatMapsBlob, upImpl->spPeaksBlob,
-                                                  1.f, upImpl->mPoseModel);
+                                                  1.f, upImpl->mPoseModel, upImpl->mGpuId);
                                                   // scaleInputToNetInputs[i], upImpl->mPoseModel);
                     }
                 }
@@ -248,19 +250,15 @@ namespace op
                 const auto caffeNetOutputBlobs = caffeNetSharedToPtr(upImpl->spCaffeNetOutputBlobs);
                 const std::vector<float> floatScaleRatios(scaleInputToNetInputs.begin(), scaleInputToNetInputs.end());
                 upImpl->spResizeAndMergeCaffe->setScaleRatios(floatScaleRatios);
+
                 #ifdef USE_CUDA
+                    //upImpl->spResizeAndMergeCaffe->Forward_cpu(caffeNetOutputBlobs, {upImpl->spHeatMapsBlob.get()}); // ~20ms
                     upImpl->spResizeAndMergeCaffe->Forward_gpu(caffeNetOutputBlobs, {upImpl->spHeatMapsBlob.get()}); // ~5ms
+                #elif USE_OPENCL
+                    //upImpl->spResizeAndMergeCaffe->Forward_cpu(caffeNetOutputBlobs, {upImpl->spHeatMapsBlob.get()}); // ~20ms
+                    upImpl->spResizeAndMergeCaffe->Forward_ocl(caffeNetOutputBlobs, {upImpl->spHeatMapsBlob.get()});
                 #else
                     upImpl->spResizeAndMergeCaffe->Forward_cpu(caffeNetOutputBlobs, {upImpl->spHeatMapsBlob.get()}); // ~20ms
-                #endif
-
-                // 3. Get peaks by Non-Maximum Suppression
-                upImpl->spNmsCaffe->setThreshold((float)get(PoseProperty::NMSThreshold));
-                #ifdef USE_CUDA
-                    upImpl->spNmsCaffe->Forward_gpu({upImpl->spHeatMapsBlob.get()}, {upImpl->spPeaksBlob.get()});// ~2ms
-                    cudaCheck(__LINE__, __FUNCTION__, __FILE__);
-                #else
-                    upImpl->spNmsCaffe->Forward_cpu({upImpl->spHeatMapsBlob.get()}, {upImpl->spPeaksBlob.get()}); // ~ 7ms
                 #endif
 
                 // Get scale net to output (i.e. image input)
@@ -270,6 +268,21 @@ namespace op
                                          intRound(scaleProducerToNetInput*inputDataSize.y)};
                 mScaleNetToOutput = {(float)resizeGetScaleFactor(netSize, inputDataSize)};
                 // mScaleNetToOutput = 1.f;
+
+                // 3. Get peaks by Non-Maximum Suppression
+                upImpl->spNmsCaffe->setThreshold((float)get(PoseProperty::NMSThreshold));
+                const auto nmsOffset = float(0.5/double(mScaleNetToOutput));
+                upImpl->spNmsCaffe->setOffset(Point<float>{nmsOffset, nmsOffset});
+                #ifdef USE_CUDA
+                    //upImpl->spNmsCaffe->Forward_cpu({upImpl->spHeatMapsBlob.get()}, {upImpl->spPeaksBlob.get()}); // ~ 7ms
+                    upImpl->spNmsCaffe->Forward_gpu({upImpl->spHeatMapsBlob.get()}, {upImpl->spPeaksBlob.get()});// ~2ms
+                    cudaCheck(__LINE__, __FUNCTION__, __FILE__);
+                #elif USE_OPENCL
+                    //upImpl->spNmsCaffe->Forward_cpu({upImpl->spHeatMapsBlob.get()}, {upImpl->spPeaksBlob.get()}); // ~ 7ms
+                    upImpl->spNmsCaffe->Forward_ocl({upImpl->spHeatMapsBlob.get()}, {upImpl->spPeaksBlob.get()});
+                #else
+                    upImpl->spNmsCaffe->Forward_cpu({upImpl->spHeatMapsBlob.get()}, {upImpl->spPeaksBlob.get()}); // ~ 7ms
+                #endif
 
                 // 4. Connecting body parts
                 // Get scale net to output (i.e. image input)

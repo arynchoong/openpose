@@ -44,7 +44,7 @@ namespace op
                     // Change w.r.t. other
                     if (numberA == 0) // numberB == 0 or not
                     {
-                        if (poseModel != PoseModel::MPI_15 && poseModel != PoseModel::MPI_15_4)
+                        if (numberBodyParts != 15)
                         {
                             for (auto i = 1; i <= numberB; i++)
                             {
@@ -89,7 +89,7 @@ namespace op
                     }
                     else // if (numberA != 0 && numberB == 0)
                     {
-                        if (poseModel != PoseModel::MPI_15 && poseModel != PoseModel::MPI_15_4)
+                        if (numberBodyParts != 15)
                         {
                             for (auto i = 1; i <= numberA; i++)
                             {
@@ -230,11 +230,14 @@ namespace op
                             }
                         }
                         // Add ears connections (in case person is looking to opposite direction to camera)
-                        else if (((poseModel == PoseModel::COCO_18
-                                    || poseModel == PoseModel::BODY_18) && (pairIndex==17 || pairIndex==18))
-                                 || ((poseModel == PoseModel::BODY_19 || poseModel == PoseModel::BODY_59)
-                                        && (pairIndex==18 || pairIndex==19))
-                                 || (poseModel == PoseModel::BODY_23 && (pairIndex==22 || pairIndex==23)))
+                        else if (
+                            (numberBodyParts == 18 && (pairIndex==17 || pairIndex==18))
+                            || ((numberBodyParts == 19 || numberBodyParts == 59)
+                                && (pairIndex==18 || pairIndex==19))
+                            || (numberBodyParts == 23 && (pairIndex==22 || pairIndex==23))
+                            || (poseModel == PoseModel::BODY_19b
+                                && (pairIndex == numberBodyPartPairs-1 || pairIndex == numberBodyPartPairs-2))
+                            )
                         {
                             for (const auto& connectionKI : connectionK)
                             {
@@ -331,10 +334,8 @@ namespace op
                     const auto bodyPartIndex = subsetI[bodyPart];
                     if (bodyPartIndex > 0)
                     {
-                        // Best results for 1 scale: x + 0, y + 0.5
-                        // +0.5 to both to keep Matlab format
-                        poseKeypoints[baseOffset] = peaksPtr[bodyPartIndex-2] * scaleFactor + 0.5f;
-                        poseKeypoints[baseOffset + 1] = peaksPtr[bodyPartIndex-1] * scaleFactor + 0.5f;
+                        poseKeypoints[baseOffset] = peaksPtr[bodyPartIndex-2] * scaleFactor;
+                        poseKeypoints[baseOffset + 1] = peaksPtr[bodyPartIndex-1] * scaleFactor;
                         poseKeypoints[baseOffset + 2] = peaksPtr[bodyPartIndex];
                     }
                     else
