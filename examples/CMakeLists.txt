@@ -1,4 +1,5 @@
 add_subdirectory(openpose)
+add_subdirectory(actionpose)
 add_subdirectory(tutorial_add_module)
 add_subdirectory(tutorial_pose)
 add_subdirectory(tutorial_thread)
