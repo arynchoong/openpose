@@ -93,7 +93,7 @@ namespace op
             mLastElementRenderedCounter = fastMin(mLastElementRenderedCounter, std::numeric_limits<int>::max() - 5);
             mLastElementRenderedCounter++;
             // OpenPose name as well as help or part to show
-            putTextOnCvMat(cvOutputData, "OpenPose - " +
+            putTextOnCvMat(cvOutputData, " - " +
                            (!mLastElementRenderedName.empty() ?
                                 mLastElementRenderedName : (mGuiEnabled ? "'h' for help" : "")),
                            {borderMargin, borderMargin}, white, false, cvOutputData.cols);
