@@ -1,11 +1,15 @@
 #ifndef OPENPOSE_WRAPPER_WRAPPER_HAND_FROM_JSON_TEST_HPP
 #define OPENPOSE_WRAPPER_WRAPPER_HAND_FROM_JSON_TEST_HPP
 
+// Third-party dependencies
+#include <opencv2/opencv.hpp>
+// OpenPose dependencies
 #include <openpose/headers.hpp>
 
 namespace op
 {
-    template<typename TDatums,
+    template<typename TDatum,
+             typename TDatums = std::vector<std::shared_ptr<TDatum>>,
              typename TWorker = std::shared_ptr<Worker<std::shared_ptr<TDatums>>>,
              typename TQueue = Queue<std::shared_ptr<TDatums>>>
     class WrapperHandFromJsonTest
@@ -58,7 +62,7 @@ namespace op
 
         /**
          * Set ThreadManager from TWorkers (private internal function).
-         * After any configure() has been called, the TWorkers are initialized. This function resets the ThreadManager and adds them. 
+         * After any configure() has been called, the TWorkers are initialized. This function resets the ThreadManager and adds them.
          * Common code for start() and exec().
          */
         void configureThreadManager();
@@ -95,13 +99,13 @@ namespace op
 #include <openpose/utilities/fileSystem.hpp>
 namespace op
 {
-    template<typename TDatums, typename TWorker, typename TQueue>
-    WrapperHandFromJsonTest<TDatums, TWorker, TQueue>::WrapperHandFromJsonTest()
+    template<typename TDatum, typename TDatums, typename TWorker, typename TQueue>
+    WrapperHandFromJsonTest<TDatum, TDatums, TWorker, TQueue>::WrapperHandFromJsonTest()
     {
     }
 
-    template<typename TDatums, typename TWorker, typename TQueue>
-    WrapperHandFromJsonTest<TDatums, TWorker, TQueue>::~WrapperHandFromJsonTest()
+    template<typename TDatum, typename TDatums, typename TWorker, typename TQueue>
+    WrapperHandFromJsonTest<TDatum, TDatums, TWorker, TQueue>::~WrapperHandFromJsonTest()
     {
         try
         {
@@ -110,21 +114,22 @@ namespace op
         }
         catch (const std::exception& e)
         {
-            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            errorDestructor(e.what(), __LINE__, __FUNCTION__, __FILE__);
         }
     }
 
-    template<typename TDatums, typename TWorker, typename TQueue>
-    void WrapperHandFromJsonTest<TDatums, TWorker, TQueue>::configure(const WrapperStructPose& wrapperStructPose,
-                                                                      const WrapperStructHand& wrapperStructHand,
-                                                                      const std::shared_ptr<Producer>& producerSharedPtr,
-                                                                      const std::string& handGroundTruth,
-                                                                      const std::string& writeJson,
-                                                                      const DisplayMode displayMode)
+    template<typename TDatum, typename TDatums, typename TWorker, typename TQueue>
+    void WrapperHandFromJsonTest<TDatum, TDatums, TWorker, TQueue>::configure(
+        const WrapperStructPose& wrapperStructPose,
+        const WrapperStructHand& wrapperStructHand,
+        const std::shared_ptr<Producer>& producerSharedPtr,
+        const std::string& handGroundTruth,
+        const std::string& writeJson,
+        const DisplayMode displayMode)
     {
         try
         {
-            log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
 
             // Shortcut
             typedef std::shared_ptr<TDatums> TDatumsPtr;
@@ -155,7 +160,7 @@ namespace op
                 // Reset initial GPU to 0 (we want them all)
                 gpuNumberStart = 0;
                 // Logging message
-                log("Auto-detecting GPUs... Detected " + std::to_string(gpuNumber) + " GPU(s), using them all.", Priority::High);
+                opLog("Auto-detecting GPUs... Detected " + std::to_string(gpuNumber) + " GPU(s), using them all.", Priority::High);
             }
 
             // Proper format
@@ -163,8 +168,9 @@ namespace op
 
             // Common parameters
             const auto finalOutputSize = wrapperStructPose.outputSize;
-            const Point<int> producerSize{(int)producerSharedPtr->get(CV_CAP_PROP_FRAME_WIDTH),
-                                          (int)producerSharedPtr->get(CV_CAP_PROP_FRAME_HEIGHT)};
+            const Point<int> producerSize{
+                (int)producerSharedPtr->get(getCvCapPropFrameWidth()),
+                (int)producerSharedPtr->get(getCvCapPropFrameHeight())};
             if (finalOutputSize.x == -1 || finalOutputSize.y == -1)
             {
                 const auto message = "Output resolution cannot be (-1 x -1) unless producerSharedPtr is also set.";
@@ -172,8 +178,8 @@ namespace op
             }
 
             // Producer
-            const auto datumProducer = std::make_shared<DatumProducer<TDatums>>(producerSharedPtr);
-            wDatumProducer = std::make_shared<WDatumProducer<TDatumsPtr, TDatums>>(datumProducer);
+            const auto datumProducer = std::make_shared<DatumProducer<TDatum>>(producerSharedPtr);
+            wDatumProducer = std::make_shared<WDatumProducer<TDatum>>(datumProducer);
 
             // Get input scales and sizes
             const auto scaleAndSizeExtractor = std::make_shared<ScaleAndSizeExtractor>(
@@ -200,7 +206,7 @@ namespace op
                 {
                     // Hand detector
                     // If tracking
-                    if (wrapperStructHand.tracking)
+                    if (wrapperStructHand.detector == Detector::BodyWithTracking)
                         error("Tracking not valid for hand detector from JSON files.", __LINE__, __FUNCTION__, __FILE__);
                     // If detection
                     else
@@ -208,10 +214,10 @@ namespace op
                     // Hand keypoint extractor
                     const auto netOutputSize = wrapperStructHand.netInputSize;
                     const auto handExtractor = std::make_shared<HandExtractorCaffe>(
-                        wrapperStructHand.netInputSize, netOutputSize, wrapperStructPose.modelFolder,
+                        wrapperStructHand.netInputSize, netOutputSize, wrapperStructPose.modelFolder.getStdString(),
                         gpuId + gpuNumberStart, wrapperStructHand.scalesNumber, wrapperStructHand.scaleRange
                     );
-                    spWPoses.at(gpuId).emplace_back(std::make_shared<WHandExtractor<TDatumsPtr>>(handExtractor));
+                    spWPoses.at(gpuId).emplace_back(std::make_shared<WHandExtractorNet<TDatumsPtr>>(handExtractor));
                 }
             }
 
@@ -227,7 +233,7 @@ namespace op
                 cpuRenderers.emplace_back(std::make_shared<WHandRenderer<TDatumsPtr>>(handRenderer));
             }
 
-            // Itermediate workers (e.g. OpenPose format to cv::Mat, json & frames recorder, ...)
+            // Itermediate workers (e.g., OpenPose format to cv::Mat, json & frames recorder, ...)
             mPostProcessingWs.clear();
             // Frame buffer and ordering
             if (spWPoses.size() > 1)
@@ -240,8 +246,9 @@ namespace op
                 mPostProcessingWs.emplace_back(std::make_shared<WOpOutputToCvMat<TDatumsPtr>>(opOutputToCvMat));
             }
             // Re-scale pose if desired
-            if (wrapperStructPose.keypointScale != ScaleMode::InputResolution)
-                error("Only wrapperStructPose.keypointScale == ScaleMode::InputResolution.", __LINE__, __FUNCTION__, __FILE__);
+            if (wrapperStructPose.keypointScaleMode != ScaleMode::InputResolution)
+                error("Only wrapperStructPose.keypointScaleMode == ScaleMode::InputResolution.",
+                      __LINE__, __FUNCTION__, __FILE__);
 
             mOutputWs.clear();
             // Write people pose data on disk (json format)
@@ -261,7 +268,7 @@ namespace op
                 );
                 spWGui = {std::make_shared<WGui<TDatumsPtr>>(gui)};
             }
-            log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
         }
         catch (const std::exception& e)
         {
@@ -269,8 +276,8 @@ namespace op
         }
     }
 
-    template<typename TDatums, typename TWorker, typename TQueue>
-    void WrapperHandFromJsonTest<TDatums, TWorker, TQueue>::exec()
+    template<typename TDatum, typename TDatums, typename TWorker, typename TQueue>
+    void WrapperHandFromJsonTest<TDatum, TDatums, TWorker, TQueue>::exec()
     {
         try
         {
@@ -283,13 +290,13 @@ namespace op
         }
     }
 
-    template<typename TDatums, typename TWorker, typename TQueue>
-    void WrapperHandFromJsonTest<TDatums, TWorker, TQueue>::reset()
+    template<typename TDatum, typename TDatums, typename TWorker, typename TQueue>
+    void WrapperHandFromJsonTest<TDatum, TDatums, TWorker, TQueue>::reset()
     {
         try
         {
             mThreadManager.reset();
-            // Reset 
+            // Reset
             wDatumProducer = nullptr;
             spWScaleAndSizeExtractor = nullptr;
             spWCvMatToOpInput = nullptr;
@@ -305,12 +312,12 @@ namespace op
         }
     }
 
-    template<typename TDatums, typename TWorker, typename TQueue>
-    void WrapperHandFromJsonTest<TDatums, TWorker, TQueue>::configureThreadManager()
+    template<typename TDatum, typename TDatums, typename TWorker, typename TQueue>
+    void WrapperHandFromJsonTest<TDatum, TDatums, TWorker, TQueue>::configureThreadManager()
     {
         try
         {
-            // Security checks
+            // Sanity checks
             if (spWCvMatToOpInput == nullptr)
                 error("Configure the WrapperHandFromJsonTest class before calling `start()`.",
                       __LINE__, __FUNCTION__, __FILE__);
@@ -357,7 +364,7 @@ namespace op
             // Thread Y+1, queues Q+1 -> Q+2
             if (spWGui != nullptr)
                 mThreadManager.add(threadId++, spWGui, queueIn++, queueOut++);
-            log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
         }
         catch (const std::exception& e)
         {
@@ -365,8 +372,8 @@ namespace op
         }
     }
 
-    template<typename TDatums, typename TWorker, typename TQueue>
-    std::vector<TWorker> WrapperHandFromJsonTest<TDatums, TWorker, TQueue>::mergeWorkers(const std::vector<TWorker>& workersA, const std::vector<TWorker>& workersB)
+    template<typename TDatum, typename TDatums, typename TWorker, typename TQueue>
+    std::vector<TWorker> WrapperHandFromJsonTest<TDatum, TDatums, TWorker, TQueue>::mergeWorkers(const std::vector<TWorker>& workersA, const std::vector<TWorker>& workersB)
     {
         try
         {

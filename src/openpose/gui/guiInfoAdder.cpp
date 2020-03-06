@@ -1,12 +1,14 @@
-#include <chrono>
+#include <openpose/gui/guiInfoAdder.hpp>
 #include <cstdio> // std::snprintf
 #include <limits> // std::numeric_limits
 #include <openpose/utilities/fastMath.hpp>
-#include <openpose/utilities/openCv.hpp>
-#include <openpose/gui/guiInfoAdder.hpp>
+#include <openpose_private/utilities/openCvPrivate.hpp>
 
 namespace op
 {
+    // Used colors
+    const cv::Scalar WHITE_SCALAR{255, 255, 255};
+
     void updateFps(unsigned long long& lastId, double& fps, unsigned int& fpsCounter,
                    std::queue<std::chrono::high_resolution_clock::time_point>& fpsQueue,
                    const unsigned long long id, const int numberGpus)
@@ -49,6 +51,59 @@ namespace op
         }
     }
 
+    void addPeopleIds(
+        cv::Mat& cvOutputData, const Array<long long>& poseIds, const Array<float>& poseKeypoints,
+        const int borderMargin)
+    {
+        try
+        {
+            if (!poseIds.empty())
+            {
+                const auto poseKeypointsArea = poseKeypoints.getSize(1)*poseKeypoints.getSize(2);
+                const auto isVisible = 0.05f;
+                for (auto i = 0u ; i < poseIds.getVolume() ; i++)
+                {
+                    if (poseIds[i] > -1)
+                    {
+                        const auto indexMain = i * poseKeypointsArea;
+                        const auto indexSecondary = i * poseKeypointsArea + poseKeypoints.getSize(2);
+                        if (poseKeypoints[indexMain+2] > isVisible || poseKeypoints[indexSecondary+2] > isVisible)
+                        {
+                            const auto xA = positiveIntRound(poseKeypoints[indexMain]);
+                            const auto yA = positiveIntRound(poseKeypoints[indexMain+1]);
+                            const auto xB = positiveIntRound(poseKeypoints[indexSecondary]);
+                            const auto yB = positiveIntRound(poseKeypoints[indexSecondary+1]);
+                            int x;
+                            int y;
+                            if (poseKeypoints[indexMain+2] > isVisible && poseKeypoints[indexSecondary+2] > isVisible)
+                            {
+                                const auto keypointRatio = positiveIntRound(
+                                    0.15f * std::sqrt((xA-xB)*(xA-xB) + (yA-yB)*(yA-yB)));
+                                x = xA + 3*keypointRatio;
+                                y = yA - 3*keypointRatio;
+                            }
+                            else if (poseKeypoints[indexMain+2] > isVisible)
+                            {
+                                x = xA + positiveIntRound(0.25f*borderMargin);
+                                y = yA - positiveIntRound(0.25f*borderMargin);
+                            }
+                            else //if (poseKeypoints[indexSecondary+2] > isVisible)
+                            {
+                                x = xB + positiveIntRound(0.25f*borderMargin);
+                                y = yB - positiveIntRound(0.5f*borderMargin);
+                            }
+                            putTextOnCvMat(cvOutputData, std::to_string(poseIds[i]), {x, y}, WHITE_SCALAR, false, cvOutputData.cols);
+                        }
+                    }
+                }
+            }
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
+    }
+
     GuiInfoAdder::GuiInfoAdder(const int numberGpus, const bool guiEnabled) :
         mNumberGpus{numberGpus},
         mGuiEnabled{guiEnabled},
@@ -58,27 +113,32 @@ namespace op
     {
     }
 
-    void GuiInfoAdder::addInfo(cv::Mat& cvOutputData, const int numberPeople, const unsigned long long id,
-                               const std::string& elementRenderedName, const unsigned long long frameNumber)
+    GuiInfoAdder::~GuiInfoAdder()
+    {
+    }
+
+    void GuiInfoAdder::addInfo(Matrix& outputData, const int numberPeople, const unsigned long long id,
+                               const std::string& elementRenderedName, const unsigned long long frameNumber,
+                               const Array<long long>& poseIds, const Array<float>& poseKeypoints)
     {
         try
         {
-            // Security checks
+            cv::Mat cvOutputData = OP_OP2CVMAT(outputData);
+            // Sanity check
             if (cvOutputData.empty())
-                error("Wrong input element (empty cvOutputData).", __LINE__, __FUNCTION__, __FILE__);
+                error("Wrong input element (empty outputData).", __LINE__, __FUNCTION__, __FILE__);
             // Size
-            const auto borderMargin = intRound(fastMax(cvOutputData.cols, cvOutputData.rows) * 0.025);
+            const auto borderMargin = positiveIntRound(fastMax(cvOutputData.cols, cvOutputData.rows) * 0.025);
             // Update fps
             updateFps(mLastId, mFps, mFpsCounter, mFpsQueue, id, mNumberGpus);
-            // Used colors
-            const cv::Scalar white{255, 255, 255};
             // Fps or s/gpu
             char charArrayAux[15];
             std::snprintf(charArrayAux, 15, "%4.1f fps", mFps);
             // Recording inverse: sec/gpu
             // std::snprintf(charArrayAux, 15, "%4.2f s/gpu", (mFps != 0. ? mNumberGpus/mFps : 0.));
-            putTextOnCvMat(cvOutputData, charArrayAux, {intRound(cvOutputData.cols - borderMargin), borderMargin},
-                           white, true, cvOutputData.cols);
+            putTextOnCvMat(
+                cvOutputData, charArrayAux, {positiveIntRound(cvOutputData.cols - borderMargin), borderMargin},
+                WHITE_SCALAR, true, cvOutputData.cols);
             // Part to show
             // Allowing some buffer when changing the part to show (if >= 2 GPUs)
             // I.e. one GPU might return a previous part after the other GPU returns the new desired part, it looks
@@ -92,18 +152,20 @@ namespace op
             }
             mLastElementRenderedCounter = fastMin(mLastElementRenderedCounter, std::numeric_limits<int>::max() - 5);
             mLastElementRenderedCounter++;
+            // Add each person ID
+            addPeopleIds(cvOutputData, poseIds, poseKeypoints, borderMargin);
             // OpenPose name as well as help or part to show
             putTextOnCvMat(cvOutputData, " - " +
                            (!mLastElementRenderedName.empty() ?
                                 mLastElementRenderedName : (mGuiEnabled ? "'h' for help" : "")),
-                           {borderMargin, borderMargin}, white, false, cvOutputData.cols);
+                           {borderMargin, borderMargin}, WHITE_SCALAR, false, cvOutputData.cols);
             // Frame number
             putTextOnCvMat(cvOutputData, "Frame: " + std::to_string(frameNumber),
-                           {borderMargin, (int)(cvOutputData.rows - borderMargin)}, white, false, cvOutputData.cols);
+                           {borderMargin, (int)(cvOutputData.rows - borderMargin)}, WHITE_SCALAR, false, cvOutputData.cols);
             // Number people
             putTextOnCvMat(cvOutputData, "People: " + std::to_string(numberPeople),
                            {(int)(cvOutputData.cols - borderMargin), (int)(cvOutputData.rows - borderMargin)},
-                           white, true, cvOutputData.cols);
+                           WHITE_SCALAR, true, cvOutputData.cols);
         }
         catch (const std::exception& e)
         {

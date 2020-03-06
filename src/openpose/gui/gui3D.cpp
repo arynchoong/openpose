@@ -1,7 +1,8 @@
-﻿#include <atomic>
+﻿#include <openpose/gui/gui3D.hpp>
+#include <atomic>
 #include <mutex>
 #include <stdio.h>
-#ifdef WITH_3D_RENDERER
+#ifdef USE_3D_RENDERER
     #include <GL/glut.h>
     #include <GL/freeglut_ext.h> // glutLeaveMainLoop
     #include <GL/freeglut_std.h>
@@ -10,12 +11,14 @@
 #include <openpose/face/faceParameters.hpp>
 #include <openpose/hand/handParameters.hpp>
 #include <openpose/pose/poseParameters.hpp>
-#include <openpose/gui/gui3D.hpp>
+#include <openpose/utilities/keypoint.hpp>
 
 namespace op
 {
-    #ifdef WITH_3D_RENDERER
+    #ifdef USE_3D_RENDERER
         const bool LOG_VERBOSE_3D_RENDERER = false;
+        const auto WINDOW_WIDTH = 1280;
+        const auto WINDOW_HEIGHT = 720;
         std::atomic<bool> sConstructorSet{false};
 
         struct Keypoints3D
@@ -36,7 +39,7 @@ namespace op
         };
 
         Keypoints3D gKeypoints3D;
-        PoseModel sPoseModel = PoseModel::COCO_18;
+        PoseModel sPoseModel = PoseModel::BODY_25;
         int sLastKeyPressed = -1;
 
         CameraMode gCameraMode = CameraMode::CAM_DEFAULT;
@@ -52,8 +55,8 @@ namespace op
         auto gXClick = 0.f;
         auto gYClick = 0.f;
         auto gGViewDistance = -250.f; // -82.3994f; //-45;
-        auto gMouseXRotate = -915.f; // -63.2f; //0;
-        auto gMouseYRotate = -5.f; // 7.f; //60;
+        auto gMouseXRotateDeg = 180.f; // -63.2f; //0;
+        auto gMouseYRotateDeg = -5.f; // 7.f; //60;
         auto gMouseXPan = -70.f; // 0;
         auto gMouseYPan = -30.f; // 0;
         auto gMouseZPan = 0.f;
@@ -98,9 +101,9 @@ namespace op
             const auto numberPeople = keypoints.getSize(0);
             const auto numberBodyParts = keypoints.getSize(1);
             const auto numberColors = colors.size();
-            const auto xOffset = -3000; // 640.f;
-            const auto yOffset = 360.f;
-            const auto zOffset = 1000; // 360.f;
+            const auto xOffset = -3000.f; // 640.f;
+            const auto yOffset = 1000.f; // 360.f;
+            const auto zOffset = 1000.f; // 360.f;
             const auto xScale = 43.f;
             const auto yScale = 24.f;
             const auto zScale = 24.f;
@@ -270,8 +273,8 @@ namespace op
             );
 
             glTranslatef(0, 0, gGViewDistance);
-            glRotatef(-gMouseYRotate, 1.f, 0.f, 0.f);
-            glRotatef(-gMouseXRotate, 0.f, 1.f, 0.f);
+            glRotatef(-gMouseYRotateDeg, 1.f, 0.f, 0.f);
+            glRotatef(-gMouseXRotateDeg, 0.f, 1.f, 0.f);
 
             glTranslatef(-gMouseXPan, gMouseYPan, -gMouseZPan);
 
@@ -300,7 +303,7 @@ namespace op
                 else  //zoom out
                     gGViewDistance -= 10 * gScaleForMouseMotion;
                 if (LOG_VERBOSE_3D_RENDERER)
-                    log("gGViewDistance: " + std::to_string(gGViewDistance));
+                    opLog("gGViewDistance: " + std::to_string(gGViewDistance));
             }
             else
             {
@@ -316,7 +319,7 @@ namespace op
                         gCameraMode = CameraMode::CAM_ROTATE;
                 }
                 if (LOG_VERBOSE_3D_RENDERER)
-                    log("Clicked: [" + std::to_string(gXClick) + "," + std::to_string(gYClick) + "]");
+                    opLog("Clicked: [" + std::to_string(gXClick) + "," + std::to_string(gYClick) + "]");
             }
             glutPostRedisplay();
         }
@@ -329,8 +332,8 @@ namespace op
             {
                 if (gCameraMode == CameraMode::CAM_ROTATE)
                 {
-                    gMouseXRotate += (x - gXClick)*0.2f;
-                    gMouseYRotate -= (y - gYClick)*0.2f;
+                    gMouseXRotateDeg += (x - gXClick)*0.2f;
+                    gMouseYRotateDeg -= (y - gYClick)*0.2f;
                 }
                 else if (gCameraMode == CameraMode::CAM_PAN)
                 {
@@ -351,11 +354,11 @@ namespace op
                 glutPostRedisplay();
                 if (LOG_VERBOSE_3D_RENDERER)
                 {
-                    log("gMouseXRotate = " + std::to_string(gMouseXRotate));
-                    log("gMouseYRotate = " + std::to_string(gMouseYRotate));
-                    log("gMouseXPan = " + std::to_string(gMouseXPan));
-                    log("gMouseYPan = " + std::to_string(gMouseYPan));
-                    log("gMouseZPan = " + std::to_string(gMouseZPan));
+                    opLog("gMouseXRotateDeg = " + std::to_string(gMouseXRotateDeg));
+                    opLog("gMouseYRotateDeg = " + std::to_string(gMouseYRotateDeg));
+                    opLog("gMouseXPan = " + std::to_string(gMouseXPan));
+                    opLog("gMouseYPan = " + std::to_string(gMouseYPan));
+                    opLog("gMouseZPan = " + std::to_string(gMouseZPan));
                 }
             }
         }
@@ -383,7 +386,7 @@ namespace op
                 int my_argc = 0;
                 glutInit(&my_argc, my_argv);
                 // Setup the size, position, and display mode for new windows
-                glutInitWindowSize(1280, 720);
+                glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
                 glutInitWindowPosition(200, 0);
                 // glutSetOption(GLUT_MULTISAMPLE,8);
                 // Ideally adding also GLUT_BORDERLESS | GLUT_CAPTIONLESS should fix the problem of disabling the `x`
@@ -409,22 +412,25 @@ namespace op
             }
         }
     #else
-        const std::string WITH_3D_RENDERER_ERROR{"OpenPose CMake must be compiled with the `WITH_3D_RENDERER` flag in"
+        const std::string USE_3D_RENDERER_ERROR{"OpenPose CMake must be compiled with the `USE_3D_RENDERER` flag in"
             " order to use the 3-D visualization renderer. Alternatively, set 2-D rendering with `--display 2`."};
     #endif
 
     Gui3D::Gui3D(const Point<int>& outputSize, const bool fullScreen,
                  const std::shared_ptr<std::atomic<bool>>& isRunningSharedPtr,
                  const std::shared_ptr<std::pair<std::atomic<bool>, std::atomic<int>>>& videoSeekSharedPtr,
-                 const std::vector<std::shared_ptr<PoseExtractor>>& poseExtractors,
+                 const std::vector<std::shared_ptr<PoseExtractorNet>>& poseExtractorNets,
+                 const std::vector<std::shared_ptr<FaceExtractorNet>>& faceExtractorNets,
+                 const std::vector<std::shared_ptr<HandExtractorNet>>& handExtractorNets,
                  const std::vector<std::shared_ptr<Renderer>>& renderers, const PoseModel poseModel,
-                 const DisplayMode displayMode) :
-        Gui{outputSize, fullScreen, isRunningSharedPtr, videoSeekSharedPtr, poseExtractors, renderers},
-        mDisplayMode{displayMode}
+                 const DisplayMode displayMode, const bool copyGlToCvMat) :
+        Gui{outputSize, fullScreen, isRunningSharedPtr, videoSeekSharedPtr, poseExtractorNets, faceExtractorNets,
+            handExtractorNets, renderers, displayMode},
+        mCopyGlToCvMat{copyGlToCvMat}
     {
         try
         {
-            #ifdef WITH_3D_RENDERER
+            #ifdef USE_3D_RENDERER
                 // Update sPoseModel
                 sPoseModel = poseModel;
                 if (!sConstructorSet)
@@ -434,7 +440,7 @@ namespace op
             #else
                 UNUSED(poseModel);
                 if (mDisplayMode == DisplayMode::DisplayAll || mDisplayMode == DisplayMode::Display3D)
-                    error(WITH_3D_RENDERER_ERROR, __LINE__, __FUNCTION__, __FILE__);
+                    error(USE_3D_RENDERER_ERROR, __LINE__, __FUNCTION__, __FILE__);
             #endif
         }
         catch (const std::exception& e)
@@ -445,14 +451,14 @@ namespace op
 
     Gui3D::~Gui3D()
     {
-        #ifdef WITH_3D_RENDERER
+        #ifdef USE_3D_RENDERER
             try
             {
                 glutLeaveMainLoop();
             }
             catch (const std::exception& e)
             {
-                error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+                errorDestructor(e.what(), __LINE__, __FUNCTION__, __FILE__);
             }
         #endif
     }
@@ -463,7 +469,7 @@ namespace op
         {
             // Init parent class
             Gui::initializationOnThread();
-            #ifdef WITH_3D_RENDERER
+            #ifdef USE_3D_RENDERER
                 // OpenGL - Initialization
                 initializeVisualization();
             #endif
@@ -478,21 +484,28 @@ namespace op
                              const Array<float>& leftHandKeypoints3D, const Array<float>& rightHandKeypoints3D)
     {
         try
-        {   
+        {
             // 3-D rendering
-            #ifdef WITH_3D_RENDERER
+            #ifdef USE_3D_RENDERER
                 if (mDisplayMode == DisplayMode::DisplayAll || mDisplayMode == DisplayMode::Display3D)
                 {
                     if (!poseKeypoints3D.empty() || !faceKeypoints3D.empty()
                         || !leftHandKeypoints3D.empty() || !rightHandKeypoints3D.empty())
                     {
                         // OpenGL Rendering
+                        // Copy new keypoints
                         std::unique_lock<std::mutex> lock{gKeypoints3D.mutex};
                         gKeypoints3D.poseKeypoints = poseKeypoints3D;
                         gKeypoints3D.faceKeypoints = faceKeypoints3D;
                         gKeypoints3D.leftHandKeypoints = leftHandKeypoints3D;
                         gKeypoints3D.rightHandKeypoints = rightHandKeypoints3D;
                         gKeypoints3D.validKeypoints = true;
+                        // From m to mm
+                        scaleKeypoints(gKeypoints3D.poseKeypoints, 1e3f);
+                        scaleKeypoints(gKeypoints3D.faceKeypoints, 1e3f);
+                        scaleKeypoints(gKeypoints3D.leftHandKeypoints, 1e3f);
+                        scaleKeypoints(gKeypoints3D.rightHandKeypoints, 1e3f);
+                        // Unlock mutex
                         lock.unlock();
                     }
                 }
@@ -512,13 +525,13 @@ namespace op
     void Gui3D::update()
     {
         try
-        {   
+        {
             // 2-D rendering
             // Display all 2-D views
             if (mDisplayMode == DisplayMode::DisplayAll || mDisplayMode == DisplayMode::Display2D)
                 Gui::update();
             // 3-D rendering
-            #ifdef WITH_3D_RENDERER
+            #ifdef USE_3D_RENDERER
                 if (mDisplayMode == DisplayMode::DisplayAll || mDisplayMode == DisplayMode::Display3D)
                 {
                     // OpenGL Rendering
@@ -540,6 +553,38 @@ namespace op
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
+    }
+
+    Matrix Gui3D::readCvMat()
+    {
+        try
+        {
+            // 3-D rendering
+            cv::Mat cvImage;
+            #ifdef USE_3D_RENDERER
+                if (mDisplayMode == DisplayMode::DisplayAll || mDisplayMode == DisplayMode::Display3D)
+                {
+                    // Save/display 3D display in OpenCV window
+                    if (mCopyGlToCvMat)
+                    {
+                        cvImage = cv::Mat(WINDOW_HEIGHT, WINDOW_WIDTH, CV_8UC3);
+                        #ifdef _WIN32
+                            glReadPixels(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, GL_BGR_EXT, GL_UNSIGNED_BYTE, cvImage.data);
+                        #else
+                            glReadPixels(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, GL_BGR, GL_UNSIGNED_BYTE, cvImage.data);
+                        #endif
+                        cv::flip(cvImage, cvImage, 0);
+                    }
+                }
+            #endif
+            Matrix image = OP_CV2OPMAT(cvImage);
+            return image;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return Matrix();
         }
     }
 }

@@ -1,13 +1,15 @@
+#include <openpose/producer/flirReader.hpp>
 #include <openpose/utilities/fastMath.hpp>
 #include <openpose/utilities/string.hpp>
-#include <openpose/producer/flirReader.hpp>
+#include <openpose_private/utilities/openCvMultiversionHeaders.hpp>
 
 namespace op
 {
-    FlirReader::FlirReader(const std::string& cameraParametersPath, const Point<int>& cameraResolution) :
-        Producer{ProducerType::FlirCamera},
-        mSpinnakerWrapper{cameraParametersPath, cameraResolution},
-        mFrameNameCounter{0}
+    FlirReader::FlirReader(const std::string& cameraParameterPath, const Point<int>& cameraResolution,
+                           const bool undistortImage, const int cameraIndex) :
+        Producer{ProducerType::FlirCamera, cameraParameterPath, undistortImage, -1},
+        mSpinnakerWrapper{cameraParameterPath, cameraResolution, undistortImage, cameraIndex},
+        mFrameNameCounter{0ull}
     {
         try
         {
@@ -31,15 +33,41 @@ namespace op
         }
         catch (const std::exception& e)
         {
-            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            errorDestructor(e.what(), __LINE__, __FUNCTION__, __FILE__);
         }
     }
 
-    std::vector<cv::Mat> FlirReader::getCameraMatrices()
+    std::vector<Matrix> FlirReader::getCameraMatrices()
     {
         try
         {
             return mSpinnakerWrapper.getCameraMatrices();
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return {};
+        }
+    }
+
+    std::vector<Matrix> FlirReader::getCameraExtrinsics()
+    {
+        try
+        {
+            return mSpinnakerWrapper.getCameraExtrinsics();
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return {};
+        }
+    }
+
+    std::vector<Matrix> FlirReader::getCameraIntrinsics()
+    {
+        try
+        {
+            return mSpinnakerWrapper.getCameraIntrinsics();
         }
         catch (const std::exception& e)
         {
@@ -53,7 +81,7 @@ namespace op
         try
         {
             const auto stringLength = 12u;
-            return toFixedLengthString(   fastMax(0ll, longLongRound(mFrameNameCounter)),   stringLength);
+            return toFixedLengthString(mFrameNameCounter, stringLength);
         }
         catch (const std::exception& e)
         {
@@ -87,7 +115,7 @@ namespace op
         }
     }
 
-    cv::Mat FlirReader::getRawFrame()
+    Matrix FlirReader::getRawFrame()
     {
         try
         {
@@ -96,11 +124,11 @@ namespace op
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-            return cv::Mat();
+            return Matrix();
         }
     }
 
-    std::vector<cv::Mat> FlirReader::getRawFrames()
+    std::vector<Matrix> FlirReader::getRawFrames()
     {
         try
         {
@@ -142,7 +170,7 @@ namespace op
                 return -1.;
             else
             {
-                log("Unknown property.", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
+                opLog("Unknown property.", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
                 return -1.;
             }
         }
@@ -162,11 +190,11 @@ namespace op
             else if (capProperty == CV_CAP_PROP_FRAME_HEIGHT)
                 mResolution.y = {(int)value};
             else if (capProperty == CV_CAP_PROP_POS_FRAMES)
-                log("This property is read-only.", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
+                opLog("This property is read-only.", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
             else if (capProperty == CV_CAP_PROP_FRAME_COUNT || capProperty == CV_CAP_PROP_FPS)
-                log("This property is read-only.", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
+                opLog("This property is read-only.", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
             else
-                log("Unknown property.", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
+                opLog("Unknown property.", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
         }
         catch (const std::exception& e)
         {

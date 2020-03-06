@@ -1,5 +1,7 @@
-#include <algorithm> // std::transform
 #include <openpose/utilities/string.hpp>
+#include <algorithm> // std::transform
+#include <cctype> // std::tolower, std::toupper
+#include <locale> // std::tolower, std::toupper
 
 namespace op
 {
@@ -48,6 +50,20 @@ namespace op
         }
     }
 
+    // Signed
+    template OP_API std::string toFixedLengthString<char>(const char number, const unsigned long long stringLength);
+    template OP_API std::string toFixedLengthString<signed char>(const signed char number, const unsigned long long stringLength);
+    template OP_API std::string toFixedLengthString<short>(const short number, const unsigned long long stringLength);
+    template OP_API std::string toFixedLengthString<int>(const int number, const unsigned long long stringLength);
+    template OP_API std::string toFixedLengthString<long>(const long number, const unsigned long long stringLength);
+    template OP_API std::string toFixedLengthString<long long>(const long long number, const unsigned long long stringLength);
+    // Unsigned
+    template OP_API std::string toFixedLengthString<unsigned char>(const unsigned char number, const unsigned long long stringLength);
+    template OP_API std::string toFixedLengthString<unsigned short>(const unsigned short number, const unsigned long long stringLength);
+    template OP_API std::string toFixedLengthString<unsigned int>(const unsigned int number, const unsigned long long stringLength);
+    template OP_API std::string toFixedLengthString<unsigned long>(const unsigned long number, const unsigned long long stringLength);
+    template OP_API std::string toFixedLengthString<unsigned long long>(const unsigned long long number, const unsigned long long stringLength);
+
     std::vector<std::string> splitString(const std::string& stringToSplit, const std::string& delimiter)
     {
         try
@@ -74,8 +90,9 @@ namespace op
     {
         try
         {
-            auto result = string;
-            std::transform(string.begin(), string.end(), result.begin(), tolower);
+            std::string result = string;
+            std::transform(string.begin(), string.end(), result.begin(),
+                [](unsigned char c) { return (unsigned char)std::tolower(c); });
             return result;
         }
         catch (const std::exception& e)
@@ -89,8 +106,9 @@ namespace op
     {
         try
         {
-            auto result = string;
-            std::transform(string.begin(), string.end(), result.begin(), toupper);
+            std::string result = string;
+            std::transform(string.begin(), string.end(), result.begin(),
+                [](unsigned char c) { return (unsigned char)std::toupper(c); });
             return result;
         }
         catch (const std::exception& e)
@@ -100,18 +118,47 @@ namespace op
         }
     }
 
+    std::string remove0sFromString(const std::string& string)
+    {
+        try
+        {
+            std::string stringNo0s;
+            if (string[0] == '0')
+            {
+                // Find first not 0
+                const std::size_t found = string.find_first_not_of("0");
+                if (found == std::string::npos)
+                    error("This should not happen.", __LINE__, __FUNCTION__, __FILE__);
+                // Make sure that 0 is not the only digit
+                if (string.size() > found && std::isdigit(string[found]))
+                    stringNo0s = string.substr(found);
+                else
+                    stringNo0s = string.substr(found-1);
+            }
+            else
+                stringNo0s = string;
+            return stringNo0s;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return "";
+        }
+    }
 
-    // Signed
-    template std::string toFixedLengthString<char>(const char number, const unsigned long long stringLength);
-    template std::string toFixedLengthString<signed char>(const signed char number, const unsigned long long stringLength);
-    template std::string toFixedLengthString<short>(const short number, const unsigned long long stringLength);
-    template std::string toFixedLengthString<int>(const int number, const unsigned long long stringLength);
-    template std::string toFixedLengthString<long>(const long number, const unsigned long long stringLength);
-    template std::string toFixedLengthString<long long>(const long long number, const unsigned long long stringLength);
-    // Unsigned
-    template std::string toFixedLengthString<unsigned char>(const unsigned char number, const unsigned long long stringLength);
-    template std::string toFixedLengthString<unsigned short>(const unsigned short number, const unsigned long long stringLength);
-    template std::string toFixedLengthString<unsigned int>(const unsigned int number, const unsigned long long stringLength);
-    template std::string toFixedLengthString<unsigned long>(const unsigned long number, const unsigned long long stringLength);
-    template std::string toFixedLengthString<unsigned long long>(const unsigned long long number, const unsigned long long stringLength);
+    std::string getFirstNumberOnString(const std::string& string)
+    {
+        try
+        {
+            const std::size_t found = string.find_first_not_of("0123456789");
+            if (found == std::string::npos)
+                error("This should not happen.", __LINE__, __FUNCTION__, __FILE__);
+            return string.substr(0, found);
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return "";
+        }
+    }
 }

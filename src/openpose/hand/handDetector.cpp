@@ -1,9 +1,9 @@
+#include <openpose/hand/handDetector.hpp>
 #include <openpose/pose/poseParameters.hpp>
 #include <openpose/utilities/check.hpp>
 #include <openpose/utilities/fastMath.hpp>
 #include <openpose/utilities/keypoint.hpp>
-#include <openpose/hand/handDetector.hpp>
- 
+
 namespace op
 {
     inline Rectangle<float> getHandFromPoseIndexes(const Array<float>& poseKeypoints, const unsigned int person, const unsigned int wrist,
@@ -127,6 +127,10 @@ namespace op
         // Parentheses instead of braces to avoid error in GCC 4.8
         mPoseIndexes(getPoseKeypoints(poseModel, {"LWrist", "LElbow", "LShoulder", "RWrist", "RElbow", "RShoulder"})),
         mCurrentId{0}
+    {
+    }
+
+    HandDetector::~HandDetector()
     {
     }
 

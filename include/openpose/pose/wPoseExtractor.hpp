@@ -13,6 +13,8 @@ namespace op
     public:
         explicit WPoseExtractor(const std::shared_ptr<PoseExtractor>& poseExtractorSharedPtr);
 
+        virtual ~WPoseExtractor();
+
         void initializationOnThread();
 
         void work(TDatums& tDatums);
@@ -39,9 +41,21 @@ namespace op
     }
 
     template<typename TDatums>
+    WPoseExtractor<TDatums>::~WPoseExtractor()
+    {
+    }
+
+    template<typename TDatums>
     void WPoseExtractor<TDatums>::initializationOnThread()
     {
-        spPoseExtractor->initializationOnThread();
+        try
+        {
+            spPoseExtractor->initializationOnThread();
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
     }
 
     template<typename TDatums>
@@ -52,26 +66,38 @@ namespace op
             if (checkNoNullNorEmpty(tDatums))
             {
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                 // Profiling speed
                 const auto profilerKey = Profiler::timerInit(__LINE__, __FUNCTION__, __FILE__);
                 // Extract people pose
-                for (auto& tDatum : *tDatums)
+                for (auto i = 0u ; i < tDatums->size() ; i++)
+                // for (auto& tDatum : *tDatums)
                 {
-                    spPoseExtractor->forwardPass(tDatum.inputNetData,
-                                                 Point<int>{tDatum.cvInputData.cols, tDatum.cvInputData.rows},
-                                                 tDatum.scaleInputToNetInputs);
-                    tDatum.poseCandidates = spPoseExtractor->getCandidatesCopy();
-                    tDatum.poseHeatMaps = spPoseExtractor->getHeatMapsCopy();
-                    tDatum.poseKeypoints = spPoseExtractor->getPoseKeypoints().clone();
-                    tDatum.poseScores = spPoseExtractor->getPoseScores().clone();
-                    tDatum.scaleNetToOutput = spPoseExtractor->getScaleNetToOutput();
+                    auto& tDatumPtr = (*tDatums)[i];
+                    // OpenPose net forward pass
+                    spPoseExtractor->forwardPass(
+                        tDatumPtr->inputNetData, Point<int>{tDatumPtr->cvInputData.cols(), tDatumPtr->cvInputData.rows()},
+                        tDatumPtr->scaleInputToNetInputs, tDatumPtr->poseNetOutput, tDatumPtr->id);
+                    // OpenPose keypoint detector
+                    tDatumPtr->poseCandidates = spPoseExtractor->getCandidatesCopy();
+                    tDatumPtr->poseHeatMaps = spPoseExtractor->getHeatMapsCopy();
+                    tDatumPtr->poseKeypoints = spPoseExtractor->getPoseKeypoints().clone();
+                    tDatumPtr->poseScores = spPoseExtractor->getPoseScores().clone();
+                    tDatumPtr->scaleNetToOutput = spPoseExtractor->getScaleNetToOutput();
+                    // Keep desired top N people
+                    spPoseExtractor->keepTopPeople(tDatumPtr->poseKeypoints, tDatumPtr->poseScores);
+                    // ID extractor (experimental)
+                    tDatumPtr->poseIds = spPoseExtractor->extractIdsLockThread(
+                        tDatumPtr->poseKeypoints, tDatumPtr->cvInputData, i, tDatumPtr->id);
+                    // Tracking (experimental)
+                    spPoseExtractor->trackLockThread(
+                        tDatumPtr->poseKeypoints, tDatumPtr->poseIds, tDatumPtr->cvInputData, i, tDatumPtr->id);
                 }
                 // Profiling speed
                 Profiler::timerEnd(profilerKey);
                 Profiler::printAveragedTimeMsOnIterationX(profilerKey, __LINE__, __FUNCTION__, __FILE__);
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             }
         }
         catch (const std::exception& e)

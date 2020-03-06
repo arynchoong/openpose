@@ -13,6 +13,8 @@ namespace op
     public:
         explicit WOpOutputToCvMat(const std::shared_ptr<OpOutputToCvMat>& opOutputToCvMat);
 
+        virtual ~WOpOutputToCvMat();
+
         void initializationOnThread();
 
         void work(TDatums& tDatums);
@@ -39,6 +41,11 @@ namespace op
     }
 
     template<typename TDatums>
+    WOpOutputToCvMat<TDatums>::~WOpOutputToCvMat()
+    {
+    }
+
+    template<typename TDatums>
     void WOpOutputToCvMat<TDatums>::initializationOnThread()
     {
     }
@@ -51,17 +58,17 @@ namespace op
             if (checkNoNullNorEmpty(tDatums))
             {
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                 // Profiling speed
                 const auto profilerKey = Profiler::timerInit(__LINE__, __FUNCTION__, __FILE__);
                 // float* -> cv::Mat
-                for (auto& tDatum : *tDatums)
-                    tDatum.cvOutputData = spOpOutputToCvMat->formatToCvMat(tDatum.outputData);
+                for (auto& tDatumPtr : *tDatums)
+                    tDatumPtr->cvOutputData = spOpOutputToCvMat->formatToCvMat(tDatumPtr->outputData);
                 // Profiling speed
                 Profiler::timerEnd(profilerKey);
                 Profiler::printAveragedTimeMsOnIterationX(profilerKey, __LINE__, __FUNCTION__, __FILE__);
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             }
         }
         catch (const std::exception& e)

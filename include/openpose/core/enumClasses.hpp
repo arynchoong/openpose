@@ -9,7 +9,9 @@ namespace op
         NetOutputResolution,
         OutputResolution,
         ZeroToOne, // [0, 1]
+        ZeroToOneFixedAspect, // [0, 1]
         PlusMinusOne, // [-1, 1]
+        PlusMinusOneFixedAspect, // [-1, 1]
         UnsignedChar, // [0, 255]
         NoScale,
     };
@@ -24,8 +26,17 @@ namespace op
     enum class RenderMode : unsigned char
     {
         None,
+        Auto, // It will select Gpu if CUDA verison, or Cpu otherwise
         Cpu,
         Gpu,
+    };
+
+    enum class ElementToRender : unsigned char
+    {
+        Skeleton,
+        Background,
+        AddKeypoints,
+        AddPAFs,
     };
 }
 

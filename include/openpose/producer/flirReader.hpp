@@ -18,11 +18,16 @@ namespace op
         /**
          * Constructor of FlirReader. It opens all the available FLIR cameras
          */
-        explicit FlirReader(const std::string& cameraParametersPath, const Point<int>& cameraResolution);
+        explicit FlirReader(const std::string& cameraParametersPath, const Point<int>& cameraResolution,
+                            const bool undistortImage = true, const int cameraIndex = -1);
 
-        ~FlirReader();
+        virtual ~FlirReader();
 
-        std::vector<cv::Mat> getCameraMatrices();
+        std::vector<Matrix> getCameraMatrices();
+
+        std::vector<Matrix> getCameraExtrinsics();
+
+        std::vector<Matrix> getCameraIntrinsics();
 
         std::string getNextFrameName();
 
@@ -37,11 +42,11 @@ namespace op
     private:
         SpinnakerWrapper mSpinnakerWrapper;
         Point<int> mResolution;
-        long long mFrameNameCounter;
+        unsigned long long mFrameNameCounter;
 
-        cv::Mat getRawFrame();
+        Matrix getRawFrame();
 
-        std::vector<cv::Mat> getRawFrames();
+        std::vector<Matrix> getRawFrames();
 
         DELETE_COPY(FlirReader);
     };

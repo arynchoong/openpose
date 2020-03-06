@@ -1,5 +1,5 @@
-#include <openpose/utilities/fileSystem.hpp>
 #include <openpose/filestream/fileSaver.hpp>
+#include <openpose/utilities/fileSystem.hpp>
 
 namespace op
 {
@@ -14,6 +14,10 @@ namespace op
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
         }
+    }
+
+    FileSaver::~FileSaver()
+    {
     }
 
     std::string FileSaver::getNextFileName(const unsigned long long index) const

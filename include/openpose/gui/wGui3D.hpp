@@ -7,11 +7,14 @@
 
 namespace op
 {
+    // This worker will do 3-D rendering
     template<typename TDatums>
     class WGui3D : public WorkerConsumer<TDatums>
     {
     public:
         explicit WGui3D(const std::shared_ptr<Gui3D>& gui3D);
+
+        virtual ~WGui3D();
 
         void initializationOnThread();
 
@@ -39,6 +42,11 @@ namespace op
     }
 
     template<typename TDatums>
+    WGui3D<TDatums>::~WGui3D()
+    {
+    }
+
+    template<typename TDatums>
     void WGui3D<TDatums>::initializationOnThread()
     {
         try
@@ -60,24 +68,31 @@ namespace op
             if (tDatums != nullptr)
             {
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                 // Profiling speed
                 const auto profilerKey = Profiler::timerInit(__LINE__, __FUNCTION__, __FILE__);
                 // Update cvMat & keypoints
                 if (!tDatums->empty())
                 {
                     // Update cvMat
-                    std::vector<cv::Mat> cvOutputDatas;
-                    for (auto& tDatum : *tDatums)
-                        cvOutputDatas.emplace_back(tDatum.cvOutputData);
+                    std::vector<Matrix> cvOutputDatas;
+                    for (auto& tDatumPtr : *tDatums)
+                        cvOutputDatas.emplace_back(tDatumPtr->cvOutputData);
                     spGui3D->setImage(cvOutputDatas);
                     // Update keypoints
-                    auto& tDatum = (*tDatums)[0];
-                    spGui3D->setKeypoints(tDatum.poseKeypoints3D, tDatum.faceKeypoints3D, tDatum.handKeypoints3D[0],
-                                          tDatum.handKeypoints3D[1]);
+                    auto& tDatumPtr = (*tDatums)[0];
+                    spGui3D->setKeypoints(
+                        tDatumPtr->poseKeypoints3D, tDatumPtr->faceKeypoints3D, tDatumPtr->handKeypoints3D[0],
+                        tDatumPtr->handKeypoints3D[1]);
                 }
                 // Refresh/update GUI
                 spGui3D->update();
+                // Read OpenCV mat equivalent
+                if (!tDatums->empty())
+                {
+                    auto& tDatumPtr = (*tDatums)[0];
+                    tDatumPtr->cvOutputData3D = spGui3D->readCvMat();
+                }
                 // Profiling speed
                 if (!tDatums->empty())
                 {
@@ -85,7 +100,7 @@ namespace op
                     Profiler::printAveragedTimeMsOnIterationX(profilerKey, __LINE__, __FUNCTION__, __FILE__);
                 }
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             }
         }
         catch (const std::exception& e)

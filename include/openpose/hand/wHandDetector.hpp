@@ -13,6 +13,8 @@ namespace op
     public:
         explicit WHandDetector(const std::shared_ptr<HandDetector>& handDetector);
 
+        virtual ~WHandDetector();
+
         void initializationOnThread();
 
         void work(TDatums& tDatums);
@@ -39,6 +41,11 @@ namespace op
     }
 
     template<typename TDatums>
+    WHandDetector<TDatums>::~WHandDetector()
+    {
+    }
+
+    template<typename TDatums>
     void WHandDetector<TDatums>::initializationOnThread()
     {
     }
@@ -51,17 +58,17 @@ namespace op
             if (checkNoNullNorEmpty(tDatums))
             {
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                 // Profiling speed
                 const auto profilerKey = Profiler::timerInit(__LINE__, __FUNCTION__, __FILE__);
                 // Detect people hand
-                for (auto& tDatum : *tDatums)
-                    tDatum.handRectangles = spHandDetector->detectHands(tDatum.poseKeypoints);
+                for (auto& tDatumPtr : *tDatums)
+                    tDatumPtr->handRectangles = spHandDetector->detectHands(tDatumPtr->poseKeypoints);
                 // Profiling speed
                 Profiler::timerEnd(profilerKey);
                 Profiler::printAveragedTimeMsOnIterationX(profilerKey, __LINE__, __FUNCTION__, __FILE__);
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             }
         }
         catch (const std::exception& e)

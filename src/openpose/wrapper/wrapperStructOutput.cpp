@@ -2,26 +2,43 @@
 
 namespace op
 {
-    WrapperStructOutput::WrapperStructOutput(const DisplayMode displayMode_, const bool guiVerbose_,
-                                             const bool fullScreen_, const std::string& writeKeypoint_,
-                                             const DataFormat writeKeypointFormat_, const std::string& writeJson_,
-                                             const std::string& writeCocoJson_, const std::string& writeImages_,
-                                             const std::string& writeImagesFormat_, const std::string& writeVideo_,
-                                             const double writeVideoFps_, const std::string& writeHeatMaps_,
-                                             const std::string& writeHeatMapsFormat_) :
-        displayMode{displayMode_},
-        guiVerbose{guiVerbose_},
-        fullScreen{fullScreen_},
+    WrapperStructOutput::WrapperStructOutput(
+        const double verbose_, const String& writeKeypoint_, const DataFormat writeKeypointFormat_,
+        const String& writeJson_, const String& writeCocoJson_, const int writeCocoJsonVariants_,
+        const int writeCocoJsonVariant_, const String& writeImages_, const String& writeImagesFormat_,
+        const String& writeVideo_, const double writeVideoFps_, const bool writeVideoWithAudio_,
+        const String& writeHeatMaps_, const String& writeHeatMapsFormat_, const String& writeVideo3D_,
+        const String& writeVideoAdam_, const String& writeBvh_, const String& udpHost_,
+        const String& udpPort_) :
+        verbose{verbose_},
         writeKeypoint{writeKeypoint_},
         writeKeypointFormat{writeKeypointFormat_},
         writeJson{writeJson_},
         writeCocoJson{writeCocoJson_},
+        writeCocoJsonVariants{writeCocoJsonVariants_},
+        writeCocoJsonVariant{writeCocoJsonVariant_},
         writeImages{writeImages_},
         writeImagesFormat{writeImagesFormat_},
         writeVideo{writeVideo_},
+        writeVideoFps{writeVideoFps_},
+        writeVideoWithAudio{writeVideoWithAudio_},
         writeHeatMaps{writeHeatMaps_},
         writeHeatMapsFormat{writeHeatMapsFormat_},
-        writeVideoFps{writeVideoFps_}
+        writeVideo3D{writeVideo3D_},
+        writeVideoAdam{writeVideoAdam_},
+        writeBvh{writeBvh_},
+        udpHost{udpHost_},
+        udpPort{udpPort_}
     {
+        try
+        {
+            if (!writeBvh.empty())
+                error("BVH writing is experimental and not available yet (flag `--write_bvh`). Please, disable this"
+                      " flag and do not open a GitHub issue asking for it.", __LINE__, __FUNCTION__, __FILE__);
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
     }
 }

@@ -10,6 +10,17 @@ namespace op
         Yaml,
         Yml,
     };
+
+    enum class CocoJsonFormat : unsigned char
+    {
+        Body,
+        Hand21,
+        Hand42,
+        Face,
+        Foot,
+        Car,
+        Size,
+    };
 }
 
 #endif // OPENPOSE_FILESTREAM_ENUM_CLASSES_HPP

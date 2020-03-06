@@ -13,6 +13,8 @@ namespace op
     public:
         explicit WHandRenderer(const std::shared_ptr<HandRenderer>& handRenderer);
 
+        virtual ~WHandRenderer();
+
         void initializationOnThread();
 
         void work(TDatums& tDatums);
@@ -39,6 +41,11 @@ namespace op
     }
 
     template<typename TDatums>
+    WHandRenderer<TDatums>::~WHandRenderer()
+    {
+    }
+
+    template<typename TDatums>
     void WHandRenderer<TDatums>::initializationOnThread()
     {
         spHandRenderer->initializationOnThread();
@@ -52,17 +59,18 @@ namespace op
             if (checkNoNullNorEmpty(tDatums))
             {
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                 // Profiling speed
                 const auto profilerKey = Profiler::timerInit(__LINE__, __FUNCTION__, __FILE__);
                 // Render people hands
-                for (auto& tDatum : *tDatums)
-                    spHandRenderer->renderHand(tDatum.outputData, tDatum.handKeypoints);
+                for (auto& tDatumPtr : *tDatums)
+                    spHandRenderer->renderHand(
+                        tDatumPtr->outputData, tDatumPtr->handKeypoints, (float)tDatumPtr->scaleInputToOutput);
                 // Profiling speed
                 Profiler::timerEnd(profilerKey);
                 Profiler::printAveragedTimeMsOnIterationX(profilerKey, __LINE__, __FUNCTION__, __FILE__);
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             }
         }
         catch (const std::exception& e)

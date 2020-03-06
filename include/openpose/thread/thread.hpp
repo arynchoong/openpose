@@ -2,7 +2,6 @@
 #define OPENPOSE_THREAD_THREAD_HPP
 
 #include <atomic>
-#include <thread>
 #include <openpose/core/common.hpp>
 #include <openpose/thread/subThread.hpp>
 #include <openpose/thread/worker.hpp>
@@ -91,13 +90,13 @@ namespace op
     {
         try
         {
-            log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             stopAndJoin();
-            log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
         }
         catch (const std::exception& e)
         {
-            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            errorDestructor(e.what(), __LINE__, __FUNCTION__, __FILE__);
         }
     }
 
@@ -135,7 +134,7 @@ namespace op
     {
         try
         {
-            log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             stopAndJoin();
             *spIsRunning = {true};
             mThread = {std::thread{&Thread::threadFunction, this}};
@@ -165,6 +164,7 @@ namespace op
     {
         try
         {
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             for (auto& subThread : mSubThreads)
                 subThread->initializationOnThread();
         }
@@ -179,10 +179,10 @@ namespace op
     {
         try
         {
-            log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             initializationOnThread();
 
-            log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             while (isRunning())
             {
                 bool allSubThreadsClosed = true;
@@ -191,12 +191,12 @@ namespace op
 
                 if (allSubThreadsClosed)
                 {
-                    log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                    opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                     stop();
                     break;
                 }
             }
-            log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+            opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
         }
         catch (const std::exception& e)
         {

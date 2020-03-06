@@ -2,6 +2,8 @@
 #define OPENPOSE_FILESTREAM_POSE_JSON_COCO_SAVER_HPP
 
 #include <openpose/core/common.hpp>
+#include <openpose/filestream/enumClasses.hpp>
+#include <openpose/pose/enumClasses.hpp>
 #include <openpose/filestream/jsonOfstream.hpp>
 
 namespace op
@@ -19,15 +21,21 @@ namespace op
          * @param filePathToSave const std::string parameter with the final file path where the generated json file
          * will be saved.
          */
-        explicit CocoJsonSaver(const std::string& filePathToSave, const bool humanReadable = true);
+        explicit CocoJsonSaver(
+            const std::string& filePathToSave, const PoseModel poseModel, const bool humanReadable = true,
+            const int cocoJsonVariants = 1, const CocoJsonFormat cocoJsonFormat = CocoJsonFormat::Body,
+            const int cocoJsonVariant = 0);
 
-        ~CocoJsonSaver();
+        virtual ~CocoJsonSaver();
 
-        void record(const Array<float>& poseKeypoints, const Array<float>& poseScores, const std::string& imageName);
+        void record(
+            const Array<float>& poseKeypoints, const Array<float>& poseScores, const std::string& imageName,
+            const unsigned long long frameNumber);
 
     private:
-        JsonOfstream mJsonOfstream;
-        bool mFirstElementAdded;
+        const PoseModel mPoseModel;
+        const int mCocoJsonVariant;
+        std::vector<std::tuple<JsonOfstream, CocoJsonFormat, bool>> mJsonOfstreams;
 
         DELETE_COPY(CocoJsonSaver);
     };

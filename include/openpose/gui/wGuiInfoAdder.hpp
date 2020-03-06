@@ -13,6 +13,8 @@ namespace op
     public:
         explicit WGuiInfoAdder(const std::shared_ptr<GuiInfoAdder>& guiInfoAdder);
 
+        virtual ~WGuiInfoAdder();
+
         void initializationOnThread();
 
         void work(TDatums& tDatums);
@@ -39,6 +41,11 @@ namespace op
     }
 
     template<typename TDatums>
+    WGuiInfoAdder<TDatums>::~WGuiInfoAdder()
+    {
+    }
+
+    template<typename TDatums>
     void WGuiInfoAdder<TDatums>::initializationOnThread()
     {
     }
@@ -51,19 +58,21 @@ namespace op
             if (checkNoNullNorEmpty(tDatums))
             {
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                 // Profiling speed
                 const auto profilerKey = Profiler::timerInit(__LINE__, __FUNCTION__, __FILE__);
                 // Add GUI components to frame
-                for (auto& tDatum : *tDatums)
-                    spGuiInfoAdder->addInfo(tDatum.cvOutputData, std::max(tDatum.poseKeypoints.getSize(0),
-                                                                          tDatum.faceKeypoints.getSize(0)),
-                                            tDatum.id, tDatum.elementRendered.second, tDatum.frameNumber);
+                for (auto& tDatumPtr : *tDatums)
+                    spGuiInfoAdder->addInfo(
+                        tDatumPtr->cvOutputData,
+                        std::max(tDatumPtr->poseKeypoints.getSize(0), tDatumPtr->faceKeypoints.getSize(0)),
+                        tDatumPtr->id, tDatumPtr->elementRendered.second, tDatumPtr->frameNumber,
+                        tDatumPtr->poseIds, tDatumPtr->poseKeypoints);
                 // Profiling speed
                 Profiler::timerEnd(profilerKey);
                 Profiler::printAveragedTimeMsOnIterationX(profilerKey, __LINE__, __FUNCTION__, __FILE__);
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             }
         }
         catch (const std::exception& e)

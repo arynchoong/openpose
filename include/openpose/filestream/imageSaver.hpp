@@ -1,7 +1,6 @@
 #ifndef OPENPOSE_FILESTREAM_IMAGE_SAVER_HPP
 #define OPENPOSE_FILESTREAM_IMAGE_SAVER_HPP
 
-#include <opencv2/core/core.hpp> // cv::Mat
 #include <openpose/core/common.hpp>
 #include <openpose/filestream/fileSaver.hpp>
 
@@ -12,7 +11,11 @@ namespace op
     public:
         ImageSaver(const std::string& directoryPath, const std::string& imageFormat);
 
-        void saveImages(const std::vector<cv::Mat>& cvOutputDatas, const std::string& fileName) const;
+        virtual ~ImageSaver();
+
+        void saveImages(const Matrix& cvOutputData, const std::string& fileName) const;
+
+        void saveImages(const std::vector<Matrix>& matOutputDatas, const std::string& fileName) const;
 
     private:
         const std::string mImageFormat;

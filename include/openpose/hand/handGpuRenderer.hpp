@@ -15,14 +15,17 @@ namespace op
                         const float alphaKeypoint = HAND_DEFAULT_ALPHA_KEYPOINT,
                         const float alphaHeatMap = HAND_DEFAULT_ALPHA_HEAT_MAP);
 
-        ~HandGpuRenderer();
+        virtual ~HandGpuRenderer();
 
         void initializationOnThread();
 
-        void renderHand(Array<float>& outputData, const std::array<Array<float>, 2>& handKeypoints);
+        void renderHandInherited(Array<float>& outputData, const std::array<Array<float>, 2>& handKeypoints);
 
     private:
         float* pGpuHand; // GPU aux memory
+        float* pMaxPtr; // GPU aux memory
+        float* pMinPtr; // GPU aux memory
+        float* pScalePtr; // GPU aux memory
 
         DELETE_COPY(HandGpuRenderer);
     };

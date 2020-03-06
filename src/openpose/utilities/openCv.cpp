@@ -1,75 +1,11 @@
-#include <openpose/utilities/fastMath.hpp>
 #include <openpose/utilities/openCv.hpp>
+#include <openpose/utilities/fastMath.hpp>
+#include <openpose_private/utilities/avx.hpp>
+#include <openpose_private/utilities/openCvMultiversionHeaders.hpp>
 
 namespace op
 {
-    void putTextOnCvMat(cv::Mat& cvMat, const std::string& textToDisplay, const Point<int>& position,
-                        const cv::Scalar& color, const bool normalizeWidth, const int imageWidth)
-    {
-        try
-        {
-            const auto font = cv::FONT_HERSHEY_SIMPLEX;
-            const auto ratio = imageWidth/1280.;
-            // const auto fontScale = 0.75;
-            const auto fontScale = 0.8 * std::sqrt(ratio);
-            const auto fontThickness = std::max(1, intRound(2*ratio));
-            const auto shadowOffset = std::max(1, intRound(2*ratio));
-            int baseline = 0;
-            const auto textSize = cv::getTextSize(textToDisplay, font, fontScale, fontThickness, &baseline);
-            const cv::Size finalPosition{position.x - (normalizeWidth ? textSize.width : 0),
-                                         position.y + textSize.height/2};
-            cv::putText(cvMat, textToDisplay,
-                        cv::Size{finalPosition.width + shadowOffset, finalPosition.height + shadowOffset},
-                        font, fontScale, cv::Scalar{0,0,0}, fontThickness);
-            cv::putText(cvMat, textToDisplay, finalPosition, font, fontScale, color, fontThickness);
-        }
-        catch (const std::exception& e)
-        {
-            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-        }
-    }
-
-    void floatPtrToUCharCvMat(cv::Mat& uCharCvMat, const float* const floatPtrImage,
-                              const std::array<int, 3> resolutionSize)
-    {
-        try
-        {
-            // Info:
-                // float* (deep net format): C x H x W
-                // cv::Mat (OpenCV format): H x W x C
-            // Allocate cv::Mat if it was not initialized yet
-            if (uCharCvMat.empty() || uCharCvMat.rows != resolutionSize[1]
-                || uCharCvMat.cols != resolutionSize[0] || uCharCvMat.type() != CV_8UC3)
-                uCharCvMat = cv::Mat(resolutionSize[1], resolutionSize[0], CV_8UC3);
-            // Fill uCharCvMat from floatPtrImage
-            auto* uCharPtrCvMat = (unsigned char*)(uCharCvMat.data);
-            const auto offsetBetweenChannels = resolutionSize[0] * resolutionSize[1];
-            const auto stepSize = uCharCvMat.step; // step = cols * channels
-            for (auto c = 0; c < resolutionSize[2]; c++)
-            {
-                const auto offsetChannelC = c*offsetBetweenChannels;
-                for (auto y = 0; y < resolutionSize[1]; y++)
-                {
-                    const auto yOffset = y * stepSize;
-                    const auto floatPtrImageOffsetY = offsetChannelC + y*resolutionSize[0];
-                    for (auto x = 0; x < resolutionSize[0]; x++)
-                    {
-                        const auto value = uchar(
-                            fastTruncate(intRound(floatPtrImage[floatPtrImageOffsetY + x]), 0, 255)
-                        );
-                        uCharPtrCvMat[yOffset + x * resolutionSize[2] + c] = value;
-                        // *(uCharCvMat.ptr<uchar>(y, x) + c) = value; // Slower but safer and cleaner equivalent
-                    }
-                }
-            }
-        }
-        catch (const std::exception& e)
-        {
-            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-        }
-    }
-
-    void unrollArrayToUCharCvMat(cv::Mat& cvMatResult, const Array<float>& array)
+    void unrollArrayToUCharCvMat(Matrix& matResult, const Array<float>& array)
     {
         try
         {
@@ -85,6 +21,7 @@ namespace op
                 const auto areaInput = height * width;
                 const auto areaOutput = channels * width;
                 // Allocate cv::Mat if it was not initialized yet
+                cv::Mat cvMatResult = OP_OP2CVMAT(matResult);
                 if (cvMatResult.empty() || cvMatResult.cols != channels * width || cvMatResult.rows != height)
                     cvMatResult = cv::Mat(height, areaOutput, CV_8UC1);
                 // Fill cvMatResult from array
@@ -100,14 +37,16 @@ namespace op
                         const auto offsetHeight = y * width;
                         for (auto x = 0 ; x < width ; x++)
                         {
-                            const auto value = uchar( fastTruncate(intRound(arrayPtr[offsetHeight + x]), 0, 255) );
+                            const auto value = uchar(
+                                fastTruncate(positiveIntRound(arrayPtr[offsetHeight + x]), 0, 255));
                             cvMatROIPtr[x] = (unsigned char)(value);
                         }
                     }
                 }
+                matResult = OP_CV2OPMAT(cvMatResult);
             }
             else
-                cvMatResult = cv::Mat();
+                matResult = Matrix();
         }
         catch (const std::exception& e)
         {
@@ -115,12 +54,13 @@ namespace op
         }
     }
 
-    void uCharCvMatToFloatPtr(float* floatPtrImage, const cv::Mat& cvImage, const int normalize)
+    void uCharCvMatToFloatPtr(float* floatPtrImage, const Matrix& matImage, const int normalize)
     {
         try
         {
+            const cv::Mat cvImage = OP_OP2CVCONSTMAT(matImage);
             // float* (deep net format): C x H x W
-            // cv::Mat (OpenCV format): H x W x C 
+            // cv::Mat (OpenCV format): H x W x C
             const int width = cvImage.cols;
             const int height = cvImage.rows;
             const int channels = cvImage.channels();
@@ -134,30 +74,101 @@ namespace op
                     const auto floatPtrImageOffsetY = (floatPtrImageOffsetC + y) * width;
                     const auto originFramePtrOffsetY = y * width;
                     for (auto x = 0; x < width; x++)
-                        floatPtrImage[floatPtrImageOffsetY + x] = float(originFramePtr[(originFramePtrOffsetY + x)
-                                                                        * channels + c]);
+                        floatPtrImage[floatPtrImageOffsetY + x] = float(
+                            originFramePtr[(originFramePtrOffsetY + x) * channels + c]);
                 }
             }
             // Normalizing if desired
-            // floatPtrImage wrapped as cv::Mat
-                // Empirically tested - OpenCV is more efficient normalizing a whole matrix/image (it uses AVX and
-                // other optimized instruction sets).
-                // In addition, the following if statement does not copy the pointer to a cv::Mat, just wrapps it.
+            // VGG
             if (normalize == 1)
             {
-                cv::Mat floatPtrImageCvWrapper(height, width, CV_32FC3, floatPtrImage);
-                floatPtrImageCvWrapper = floatPtrImageCvWrapper/256.f - 0.5f;
+                #ifdef WITH_AVX
+                    // // To check results are the same (norm(x1-x2) = 0)
+                    // cv::Mat floatPtrImageCvWrapper(height, width, CV_32FC3, floatPtrImage);
+                    // cv::Mat floatPtrImageCvWrapperTest = floatPtrImageCvWrapper*(1/256.f) - 0.5f;
+                    // // Speed profiling
+                    // const auto REPS = 2000;
+                    // double timeNormalize0 = 0.;
+                    // double timeNormalize1 = 0.;
+                    // double timeNormalize2 = 0.;
+                    // double timeNormalize3 = 0.;
+                    // // OpenCV wrapper
+                    // OP_PROFILE_INIT(REPS);
+                    // cv::Mat floatPtrImageCvWrapper(height, width, CV_32FC3, floatPtrImage);
+                    // floatPtrImageCvWrapper = floatPtrImageCvWrapper*(1/256.f) - 0.5f;
+                    // OP_PROFILE_END(timeNormalize0, 1e6, REPS);
+                    // // C++ sequential code
+                    // OP_PROFILE_INIT(REPS);
+                    // const auto ratio = 1.f/256.f;
+                    // for (auto pixel = 0 ; pixel < width*height*channels ; ++pixel)
+                    //     floatPtrImage[pixel] = floatPtrImage[pixel]*ratio - 0.5f;
+                    // OP_PROFILE_END(timeNormalize1, 1e6, REPS);
+                    // // OpenCV wrapper
+                    // OP_PROFILE_INIT(REPS);
+                    // cv::Mat floatPtrImageCvWrapper(height, width, CV_32FC3, floatPtrImage);
+                    // floatPtrImageCvWrapper = floatPtrImageCvWrapper*(1/256.f) - 0.5f;
+                    // OP_PROFILE_END(timeNormalize2, 1e6, REPS);
+                    // OP_PROFILE_INIT(REPS);
+                    // AVX code
+                    const auto volume = width*height*channels;
+                    int pixel;
+                    const __m256 mmRatio = _mm256_set1_ps(1.f/256.f);
+                    const __m256 mmBias = _mm256_set1_ps(-0.5f);
+                    for (pixel = 0 ; pixel < volume-7 ; pixel += 8)
+                    {
+                        const __m256 input = _mm256_load_ps(&floatPtrImage[pixel]);
+                        // const __m256 input = _mm256_loadu_ps(&floatPtrImage[pixel]); // If non-aligned pointer
+                        const __m256 output = _mm256_fmadd_ps(input, mmRatio, mmBias);
+                        _mm256_store_ps(&floatPtrImage[pixel], output);
+                        // _mm256_storeu_ps(&floatPtrImage[pixel], output); // If non-aligned pointer
+                    }
+                    const auto ratio = 1.f/256.f;
+                    for (; pixel < volume ; ++pixel)
+                        floatPtrImage[pixel] = floatPtrImage[pixel]*ratio - 0.5f;
+                    // OP_PROFILE_END(timeNormalize3, 1e6, REPS);
+                    // std::cout
+                    //     << "TN1: " << timeNormalize0 << " us\n"
+                    //     << "TN1: " << timeNormalize1 << " us\n"
+                    //     << "TN2: " << timeNormalize2 << " us\n"
+                    //     << "TN3: " << timeNormalize3 << " us\n"
+                    //     << std::endl;
+                    // std::cout
+                    //     << "Norm: " << cv::norm(floatPtrImageCvWrapper-floatPtrImageCvWrapperTest) << "\n"
+                    //     << std::endl;
+                // Non optimized code
+                #else
+                    // floatPtrImage wrapped as cv::Mat
+                        // Empirically tested - OpenCV is more efficient normalizing a whole matrix/image (it uses AVX and
+                        // other optimized instruction sets).
+                        // In addition, the following if statement does not copy the pointer to a cv::Mat, just wrapps it.
+                    cv::Mat floatPtrImageCvWrapper(height, width, CV_32FC3, floatPtrImage);
+                    floatPtrImageCvWrapper = floatPtrImageCvWrapper*(1/256.f) - 0.5f;
+                #endif
             }
+            // // ResNet
+            // else if (normalize == 2)
+            // {
+            //     const int imageArea = width * height;
+            //     const std::array<float,3> means{102.9801, 115.9465, 122.7717};
+            //     for (auto i = 0 ; i < 3 ; i++)
+            //     {
+            //         cv::Mat floatPtrImageCvWrapper(height, width, CV_32FC1, floatPtrImage + i*imageArea);
+            //         floatPtrImageCvWrapper = floatPtrImageCvWrapper - means[i];
+            //     }
+            // }
+            // DenseNet
             else if (normalize == 2)
             {
+                const auto scaleDenseNet = 0.017;
                 const int imageArea = width * height;
-                const std::array<float,3> means{102.9801, 115.9465, 122.7717};
+                const std::array<float,3> means{103.94f, 116.78f, 123.68f};
                 for (auto i = 0 ; i < 3 ; i++)
                 {
                     cv::Mat floatPtrImageCvWrapper(height, width, CV_32FC1, floatPtrImage + i*imageArea);
-                    floatPtrImageCvWrapper = floatPtrImageCvWrapper - means[i];
+                    floatPtrImageCvWrapper = scaleDenseNet*(floatPtrImageCvWrapper - means[i]);
                 }
             }
+            // Unknown
             else if (normalize != 0)
                 error("Unknown normalization value (" + std::to_string(normalize) + ").",
                       __LINE__, __FUNCTION__, __FILE__);
@@ -183,27 +194,182 @@ namespace op
         }
     }
 
-    cv::Mat resizeFixedAspectRatio(const cv::Mat& cvMat, const double scaleFactor, const Point<int>& targetSize,
-                                   const int borderMode, const cv::Scalar& borderValue)
+    void keepRoiInside(Rectangle<int>& roi, const int imageWidth, const int imageHeight)
     {
         try
         {
-            const cv::Size cvTargetSize{targetSize.x, targetSize.y};
-            cv::Mat resultingCvMat;
-            cv::Mat M = cv::Mat::eye(2,3,CV_64F);
-            M.at<double>(0,0) = scaleFactor;
-            M.at<double>(1,1) = scaleFactor;
-            if (scaleFactor != 1. || cvTargetSize != cvMat.size())
-                cv::warpAffine(cvMat, resultingCvMat, M, cvTargetSize,
-                               (scaleFactor < 1. ? cv::INTER_AREA : cv::INTER_CUBIC), borderMode, borderValue);
-            else
-                resultingCvMat = cvMat.clone();
-            return resultingCvMat;
+            // x,y < 0
+            if (roi.x < 0)
+            {
+                roi.width += roi.x;
+                roi.x = 0;
+            }
+            if (roi.y < 0)
+            {
+                roi.height += roi.y;
+                roi.y = 0;
+            }
+            // Bigger than image
+            if (roi.width + roi.x >= imageWidth)
+                roi.width = imageWidth - 1 - roi.x;
+            if (roi.height + roi.y >= imageHeight)
+                roi.height = imageHeight - 1 - roi.y;
+            // Width/height negative
+            roi.width = fastMax(0, roi.width);
+            roi.height = fastMax(0, roi.height);
         }
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-            return cv::Mat();
+        }
+    }
+
+    void rotateAndFlipFrame(Matrix& frame, const double rotationAngle, const bool flipFrame)
+    {
+        try
+        {
+            cv::Mat cvMatFrame = OP_OP2CVMAT(frame);
+            if (!cvMatFrame.empty())
+            {
+                const auto rotationAngleInt = (int)std::round(rotationAngle) % 360;
+                if (rotationAngleInt == 0 || rotationAngleInt == 360)
+                {
+                    if (flipFrame)
+                        cv::flip(cvMatFrame, cvMatFrame, 1);
+                }
+                else if (rotationAngleInt == 90 || rotationAngleInt == -270)
+                {
+                    cv::transpose(cvMatFrame, cvMatFrame);
+                    if (!flipFrame)
+                        cv::flip(cvMatFrame, cvMatFrame, 0);
+                }
+                else if (rotationAngleInt == 180 || rotationAngleInt == -180)
+                {
+                    if (flipFrame)
+                        cv::flip(cvMatFrame, cvMatFrame, 0);
+                    else
+                        cv::flip(cvMatFrame, cvMatFrame, -1);
+                }
+                else if (rotationAngleInt == 270 || rotationAngleInt == -90)
+                {
+                    cv::transpose(cvMatFrame, cvMatFrame);
+                    if (flipFrame)
+                        cv::flip(cvMatFrame, cvMatFrame, -1);
+                    else
+                        cv::flip(cvMatFrame, cvMatFrame, 1);
+                }
+                else
+                    error("Rotation angle = " + std::to_string(rotationAngleInt)
+                          + " != {0, 90, 180, 270} degrees.", __LINE__, __FUNCTION__, __FILE__);
+            }
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
+    }
+
+    int getCvCapPropFrameCount()
+    {
+        try
+        {
+            return CV_CAP_PROP_FRAME_COUNT;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return -1;
+        }
+    }
+
+    int getCvCapPropFrameFps()
+    {
+        try
+        {
+            return CV_CAP_PROP_FPS;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return -1;
+        }
+    }
+
+    int getCvCapPropFrameWidth()
+    {
+        try
+        {
+            return CV_CAP_PROP_FRAME_WIDTH;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return -1;
+        }
+    }
+
+    int getCvCapPropFrameHeight()
+    {
+        try
+        {
+            return CV_CAP_PROP_FRAME_HEIGHT;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return -1;
+        }
+    }
+
+    int getCvFourcc(const char c1, const char c2, const char c3, const char c4)
+    {
+        try
+        {
+            return CV_FOURCC(c1,c2,c3,c4);
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return -1;
+        }
+    }
+
+    int getCvImwriteJpegQuality()
+    {
+        try
+        {
+            return CV_IMWRITE_JPEG_QUALITY;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return -1;
+        }
+    }
+
+    int getCvImwritePngCompression()
+    {
+        try
+        {
+            return CV_IMWRITE_PNG_COMPRESSION;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return -1;
+        }
+    }
+
+    int getCvLoadImageAnydepth()
+    {
+        try
+        {
+            return CV_LOAD_IMAGE_ANYDEPTH;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return -1;
         }
     }
 }

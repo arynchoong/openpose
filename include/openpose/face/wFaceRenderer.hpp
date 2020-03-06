@@ -13,6 +13,8 @@ namespace op
     public:
         explicit WFaceRenderer(const std::shared_ptr<FaceRenderer>& faceRenderer);
 
+        virtual ~WFaceRenderer();
+
         void initializationOnThread();
 
         void work(TDatums& tDatums);
@@ -39,6 +41,11 @@ namespace op
     }
 
     template<typename TDatums>
+    WFaceRenderer<TDatums>::~WFaceRenderer()
+    {
+    }
+
+    template<typename TDatums>
     void WFaceRenderer<TDatums>::initializationOnThread()
     {
         spFaceRenderer->initializationOnThread();
@@ -52,17 +59,18 @@ namespace op
             if (checkNoNullNorEmpty(tDatums))
             {
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                 // Profiling speed
                 const auto profilerKey = Profiler::timerInit(__LINE__, __FUNCTION__, __FILE__);
                 // Render people face
-                for (auto& tDatum : *tDatums)
-                    spFaceRenderer->renderFace(tDatum.outputData, tDatum.faceKeypoints);
+                for (auto& tDatumPtr : *tDatums)
+                    spFaceRenderer->renderFace(
+                        tDatumPtr->outputData, tDatumPtr->faceKeypoints, (float)tDatumPtr->scaleInputToOutput);
                 // Profiling speed
                 Profiler::timerEnd(profilerKey);
                 Profiler::printAveragedTimeMsOnIterationX(profilerKey, __LINE__, __FUNCTION__, __FILE__);
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             }
         }
         catch (const std::exception& e)

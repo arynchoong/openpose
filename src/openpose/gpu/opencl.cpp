@@ -1,8 +1,8 @@
+#include <openpose_private/gpu/opencl.hcl> // Must be before below includes
 #include <map>
 #include <mutex>
-#include <openpose/gpu/opencl.hcl> // Must be before below includes
 #ifdef USE_OPENCL
-    #include <openpose/gpu/cl2.hpp>
+    #include <openpose_private/gpu/cl2.hpp>
     #include <viennacl/backend/opencl.hpp>
     #include <caffe/caffe.hpp>
 #endif
@@ -53,6 +53,7 @@ namespace op
                     replaceAll(src, "Type", type);
                     program = cl::Program(context, src, true);
                 }
+                #if defined(USE_OPENCL) && defined(CL_HPP_ENABLE_EXCEPTIONS)
                 catch (cl::BuildError e)
                 {
                     auto buildInfo = e.getBuildLog();
@@ -61,6 +62,11 @@ namespace op
                                      pair.second << std::endl;
                         error("OpenCL error: OpenPose crashed due to the previously printed errors.",
                               __LINE__, __FUNCTION__, __FILE__);
+                }
+                #endif
+                catch (const std::exception& e)
+                {
+                    error(e.what(), __LINE__, __FUNCTION__, __FILE__);
                 }
                 return true;
             #else
@@ -149,7 +155,7 @@ namespace op
                                         upImpl->mQueue = cl::CommandQueue(upImpl->mContext, upImpl->mDevice,
                                                                           CL_QUEUE_PROFILING_ENABLE);
                                         deviceFound = true;
-                                        op::log("Made new GPU Instance: " + std::to_string(deviceId));
+                                        opLog("Made new GPU Instance: " + std::to_string(deviceId));
                                         break;
                                     }
                                 }
@@ -180,7 +186,7 @@ namespace op
                                         upImpl->mQueue = cl::CommandQueue(upImpl->mContext, upImpl->mDevice,
                                                                           CL_QUEUE_PROFILING_ENABLE);
                                         deviceFound = true;
-                                        op::log("Made new CPU Instance: " + std::to_string(deviceId));
+                                        opLog("Made new CPU Instance: " + std::to_string(deviceId));
                                         break;
                                     }
                                 }
@@ -213,7 +219,7 @@ namespace op
                                         upImpl->mQueue = cl::CommandQueue(upImpl->mContext, upImpl->mDevice,
                                                                           CL_QUEUE_PROFILING_ENABLE);
                                         deviceFound = true;
-                                        op::log("Made new ACC Instance: " + std::to_string(deviceId));
+                                        opLog("Made new ACC Instance: " + std::to_string(deviceId));
                                         break;
                                     }
                                 }
@@ -231,9 +237,15 @@ namespace op
                         }
                     }
                 }
+                #if defined(USE_OPENCL) && defined(CL_HPP_ENABLE_EXCEPTIONS)
                 catch (cl::Error e)
                 {
-                    op::log("Error: " + std::string(e.what()));
+                    opLog("Error: " + std::string(e.what()));
+                }
+                #endif
+                catch (const std::exception& e)
+                {
+                    error(e.what(), __LINE__, __FUNCTION__, __FILE__);
                 }
             }
         #else
@@ -253,6 +265,28 @@ namespace op
     {
         #ifdef USE_OPENCL
             return upImpl->mQueue;
+        #else
+            error("OpenPose must be compiled with the `USE_OPENCL` macro definition in order to use this"
+                  " functionality.", __LINE__, __FUNCTION__, __FILE__);
+            throw std::runtime_error("");
+        #endif
+    }
+
+    cl::Device& OpenCL::getDevice()
+    {
+        #ifdef USE_OPENCL
+            return upImpl->mDevice;
+        #else
+            error("OpenPose must be compiled with the `USE_OPENCL` macro definition in order to use this"
+                  " functionality.", __LINE__, __FUNCTION__, __FILE__);
+            throw std::runtime_error("");
+        #endif
+    }
+
+    cl::Context& OpenCL::getContext()
+    {
+        #ifdef USE_OPENCL
+            return upImpl->mContext;
         #else
             error("OpenPose must be compiled with the `USE_OPENCL` macro definition in order to use this"
                   " functionality.", __LINE__, __FUNCTION__, __FILE__);
@@ -282,13 +316,13 @@ namespace op
             if (!(upImpl->mClKernels.find(key) != upImpl->mClKernels.end()))
             {
                 upImpl->mClKernels[key] = cl::Kernel(program, kernelName.c_str());
-                op::log("Kernel: " + kernelName + " Type: " + type + + " GPU: " + std::to_string(upImpl->mId) +
-                        " built successfully");
+                opLog("Kernel: " + kernelName + " Type: " + type + + " GPU: " + std::to_string(upImpl->mId) +
+                    " built successfully");
                 return true;
             }
             else
             {
-                op::log("Kernel " + kernelName + " already built");
+                opLog("Kernel " + kernelName + " already built");
                 return false;
             }
         #else
@@ -417,19 +451,38 @@ namespace op
             std::vector<cl::Platform> platforms;
             std::vector<cl::Device> devices;
             cl_uint type;
-            try {
+            try
+            {
                 cl::Platform::get(&platforms);
                 if (!platforms.size())
                     return -1;
+
+                // Special Case for Apple which has CPU OpenCL Device too
+                int cpu_device_count = 0;
+                #ifdef __APPLE__
+                    type = platforms[0].getDevices(CL_DEVICE_TYPE_CPU, &devices);
+                    if (type == CL_SUCCESS)
+                        cpu_device_count = devices.size();
+                #endif
+
                 type = platforms[0].getDevices(CL_DEVICE_TYPE_GPU, &devices);
                 if (type == CL_SUCCESS)
-                    return devices.size();
+                    return devices.size() + cpu_device_count;
                 else
+                {
+                    error("No GPU Devices were found. OpenPose only supports GPU OpenCL", __LINE__, __FUNCTION__, __FILE__);
                     return -1;
+                }
             }
+            #if defined(USE_OPENCL) && defined(CL_HPP_ENABLE_EXCEPTIONS)
             catch (cl::Error& e)
             {
-                op::log("Error: " + std::string(e.what()));
+                opLog("Error: " + std::string(e.what()));
+            }
+            #endif
+            catch (const std::exception& e)
+            {
+                error(e.what(), __LINE__, __FUNCTION__, __FILE__);
             }
         #else
             error("OpenPose must be compiled with the `USE_OPENCL` macro definition in order to use this"
@@ -449,6 +502,20 @@ namespace op
             UNUSED(region);
             error("OpenPose must be compiled with the `USE_OPENCL` macro definition in order to use this"
                   " functionality.", __LINE__, __FUNCTION__, __FILE__);
+        #endif
+    }
+
+    int OpenCL::getAlignment()
+    {
+        #ifdef USE_OPENCL
+        cl::Device& device = this->getDevice();
+        cl_uint mem_align;
+        clGetDeviceInfo(device.get(), CL_DEVICE_MEM_BASE_ADDR_ALIGN, sizeof(mem_align), &mem_align, nullptr);
+        return mem_align;
+        #else
+        error("OpenPose must be compiled with the `USE_OPENCL` macro definition in order to use this"
+              " functionality.", __LINE__, __FUNCTION__, __FILE__);
+        return 0;
         #endif
     }
 

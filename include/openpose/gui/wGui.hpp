@@ -13,6 +13,8 @@ namespace op
     public:
         explicit WGui(const std::shared_ptr<Gui>& gui);
 
+        virtual ~WGui();
+
         void initializationOnThread();
 
         void workConsumer(const TDatums& tDatums);
@@ -39,6 +41,11 @@ namespace op
     }
 
     template<typename TDatums>
+    WGui<TDatums>::~WGui()
+    {
+    }
+
+    template<typename TDatums>
     void WGui<TDatums>::initializationOnThread()
     {
         try
@@ -60,18 +67,18 @@ namespace op
             if (tDatums != nullptr)
             {
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                 // Profiling speed
                 const auto profilerKey = Profiler::timerInit(__LINE__, __FUNCTION__, __FILE__);
                 // Update cvMat
                 if (!tDatums->empty())
                 {
-                    std::vector<cv::Mat> cvOutputDatas;
-                    for (auto& tDatum : *tDatums)
-                        cvOutputDatas.emplace_back(tDatum.cvOutputData);
+                    std::vector<Matrix> cvOutputDatas;
+                    for (auto& tDatumPtr : *tDatums)
+                        cvOutputDatas.emplace_back(tDatumPtr->cvOutputData);
                     spGui->setImage(cvOutputDatas);
                 }
-                // Refresh GUI
+                // Refresh/update GUI
                 spGui->update();
                 // Profiling speed
                 if (!tDatums->empty())
@@ -80,7 +87,7 @@ namespace op
                     Profiler::printAveragedTimeMsOnIterationX(profilerKey, __LINE__, __FUNCTION__, __FILE__);
                 }
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             }
         }
         catch (const std::exception& e)

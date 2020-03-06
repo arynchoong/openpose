@@ -1,7 +1,7 @@
+#include <openpose/pose/renderPose.hpp>
 #include <openpose/pose/poseParameters.hpp>
 #include <openpose/utilities/fastMath.hpp>
 #include <openpose/utilities/keypoint.hpp>
-#include <openpose/pose/renderPose.hpp>
 
 namespace op
 {
@@ -12,12 +12,9 @@ namespace op
         {
             if (!frameArray.empty())
             {
-                // Array<float> --> cv::Mat
-                auto frame = frameArray.getCvMat();
-
                 // Background
                 if (!blendOriginalFrame)
-                    frame.setTo(0.f); // [0-255]
+                    frameArray.getCvMat().setTo(0.f); // [0-255]
 
                 // Parameters
                 const auto thicknessCircleRatio = 1.f/75.f;

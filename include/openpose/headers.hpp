@@ -4,11 +4,11 @@
 // 3d module
 #include <openpose/3d/headers.hpp>
 
+// calibration module
+#include <openpose/calibration/headers.hpp>
+
 // core module
 #include <openpose/core/headers.hpp>
-
-// experimental module
-#include <openpose/experimental/headers.hpp>
 
 // face module
 #include <openpose/face/headers.hpp>
@@ -33,6 +33,12 @@
 
 // threading module
 #include <openpose/thread/headers.hpp>
+
+// tracking module
+#include <openpose/tracking/headers.hpp>
+
+// unity module
+#include <openpose/unity/headers.hpp>
 
 // utilities module
 #include <openpose/utilities/headers.hpp>

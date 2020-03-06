@@ -20,9 +20,9 @@ OpenPose C++ API - How to Develop OpenPose
     1. Only `//` comments are allowed in the code, `/* */` should not be used.
     2. There should be a (at least) 1-line comment for each block of code inside each function.
 5. Loops and statements:
-    1. There should be a space between the keyword (`if`, `for`, etc) and the parenthesis, e.g.: `if (true)`. Wrong: `if(true)`. Note: So they can be easily located with Ctrl + F.
+    1. There should be a space between the keyword (`if`, `for`, etc) and the parenthesis, e.g., `if (true)`. Wrong: `if(true)`. Note: So they can be easily located with Ctrl + F.
     2. Braces should be added in the following line with respect to the loop/statement keyword. See example in point 3.
-    3. 1-line loops/statements should not contain braces. E.g.:
+    3. 1-line loops/statements should not contain braces. E.g.,
 ```
 if (booleanParameter)
     anotherParameter = 25;
@@ -40,7 +40,7 @@ else
     2. They should be sorted in this order:
         1. Std libraries.
         2. OS libraries.
-        3. 3rd party libraries (e.g. Caffe, OpenCV).
+        3. 3rd party libraries (e.g., Caffe, OpenCV).
         4. OpenPose libraries.
         5. If it is a cpp file, the last one should be its own hpp.
     3. Inside each of the previous groups, it should be sorted alphabetically.
@@ -66,8 +66,8 @@ This is the faster method to debug a segmentation fault problem. Usual scenario:
         2. Go to `openpose/utilities/errorAndLog.hpp` and modify `dLog`:
             1. Comment `#ifndef NDEBUG` and its else and endif.
     2. Call OpenPose with `--logging_level 0 --disable_multi_thread`.
-    3. At this point you have an idea of in which file class the segmentation fault is coming from. Now you can further isolate the error by iteratively adding the following line all over the code until you find the exact position of the segmentation fault: `log("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);`
-    4. After you have found the segmentation fault, remember to remove all the extra `log()` calls that you temporarily added.
+    3. At this point you have an idea of in which file class the segmentation fault is coming from. Now you can further isolate the error by iteratively adding the following line all over the code until you find the exact position of the segmentation fault: `opLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);`
+    4. After you have found the segmentation fault, remember to remove all the extra `opLog()` calls that you temporarily added.
 
 
 

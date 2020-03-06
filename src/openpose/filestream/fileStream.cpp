@@ -1,10 +1,10 @@
+#include <openpose/filestream/fileStream.hpp>
 #include <fstream> // std::ifstream, std::ofstream
 #include <opencv2/highgui/highgui.hpp> // cv::imread
 #include <openpose/utilities/fastMath.hpp>
 #include <openpose/utilities/fileSystem.hpp>
 #include <openpose/utilities/string.hpp>
 #include <openpose/filestream/jsonOfstream.hpp>
-#include <openpose/filestream/fileStream.hpp>
 
 namespace op
 {
@@ -17,15 +17,16 @@ namespace op
         return fileNameNoExtension + "." + dataFormatToString(dataFormat);
     }
 
-    void addKeypointsToJson(JsonOfstream& jsonOfstream,
-                            const std::vector<std::pair<Array<float>, std::string>>& keypointVector)
+    void addKeypointsToJson(
+        JsonOfstream& jsonOfstream, const std::vector<std::pair<Array<float>, std::string>>& keypointVector)
     {
         try
         {
-            // Security checks
+            // Sanity check
             for (const auto& keypointPair : keypointVector)
-                if (!keypointPair.first.empty() && keypointPair.first.getNumberDimensions() != 3 )
-                    error("keypointVector.getNumberDimensions() != 3.", __LINE__, __FUNCTION__, __FILE__);
+                if (!keypointPair.first.empty() && keypointPair.first.getNumberDimensions() != 3
+                    && keypointPair.first.getNumberDimensions() != 1)
+                    error("keypointVector.getNumberDimensions() != 1 && != 3.", __LINE__, __FUNCTION__, __FILE__);
             // Add people keypoints
             jsonOfstream.key("people");
             jsonOfstream.arrayOpen();
@@ -76,8 +77,8 @@ namespace op
         }
     }
 
-    void addCandidatesToJson(JsonOfstream& jsonOfstream,
-                             const std::vector<std::vector<std::array<float,3>>>& candidates)
+    void addCandidatesToJson(
+        JsonOfstream& jsonOfstream, const std::vector<std::vector<std::array<float,3>>>& candidates)
     {
         try
         {
@@ -85,7 +86,7 @@ namespace op
             jsonOfstream.key("part_candidates");
             jsonOfstream.arrayOpen();
             // Ger max numberParts
-            auto numberParts = candidates.size();
+            const auto numberParts = candidates.size();
             jsonOfstream.objectOpen();
             for (auto part = 0u ; part < numberParts ; part++)
             {
@@ -204,12 +205,13 @@ namespace op
         }
     }
 
-    void saveData(const std::vector<cv::Mat>& cvMats, const std::vector<std::string>& cvMatNames,
+    void saveData(const std::vector<Matrix>& opMats, const std::vector<std::string>& cvMatNames,
                   const std::string& fileNameNoExtension, const DataFormat dataFormat)
     {
         try
         {
-            // Security checks
+            OP_OP2CVVECTORMAT(cvMats, opMats)
+            // Sanity checks
             if (dataFormat == DataFormat::Json && CV_MAJOR_VERSION < 3)
                 error(errorMessage, __LINE__, __FUNCTION__, __FILE__);
             if (cvMats.size() != cvMatNames.size())
@@ -228,12 +230,12 @@ namespace op
         }
     }
 
-    void saveData(const cv::Mat& cvMat, const std::string cvMatName, const std::string& fileNameNoExtension,
+    void saveData(const Matrix& opMat, const std::string cvMatName, const std::string& fileNameNoExtension,
                   const DataFormat dataFormat)
     {
         try
         {
-            saveData(std::vector<cv::Mat>{cvMat}, std::vector<std::string>{cvMatName}, fileNameNoExtension,
+            saveData(std::vector<Matrix>{opMat}, std::vector<std::string>{cvMatName}, fileNameNoExtension,
                      dataFormat);
         }
         catch (const std::exception& e)
@@ -242,16 +244,17 @@ namespace op
         }
     }
 
-    std::vector<cv::Mat> loadData(const std::vector<std::string>& cvMatNames, const std::string& fileNameNoExtension,
+    std::vector<Matrix> loadData(const std::vector<std::string>& cvMatNames, const std::string& fileNameNoExtension,
                                   const DataFormat dataFormat)
     {
         try
         {
-            // Security checks
+            // Sanity check
             if (dataFormat == DataFormat::Json && CV_MAJOR_VERSION < 3)
                 error(errorMessage, __LINE__, __FUNCTION__, __FILE__);
+            // File name
             const auto fileName = getFullName(fileNameNoExtension, dataFormat);
-            // Security checks
+            // Sanity check
             if (!existFile(fileName))
                 error("File to be read does not exist: " + fileName + ".", __LINE__, __FUNCTION__, __FILE__);
             // Read file
@@ -260,7 +263,8 @@ namespace op
             for (auto i = 0u ; i < cvMats.size() ; i++)
                 fileStorage[cvMatNames[i]] >> cvMats[i];
             fileStorage.release();
-            return cvMats;
+            OP_CV2OPVECTORMAT(opMats, cvMats)
+            return opMats;
         }
         catch (const std::exception& e)
         {
@@ -269,29 +273,28 @@ namespace op
         }
     }
 
-    cv::Mat loadData(const std::string& cvMatName, const std::string& fileNameNoExtension, const DataFormat dataFormat)
+    Matrix loadData(const std::string& cvMatName, const std::string& fileNameNoExtension, const DataFormat dataFormat)
     {
         try
         {
-            return loadData(std::vector<std::string>{cvMatName}, fileNameNoExtension, dataFormat)[0];
+            return OP_CV2OPMAT(loadData(std::vector<std::string>{cvMatName}, fileNameNoExtension, dataFormat)[0]);
         }
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-            return {};
+            return Matrix();
         }
     }
 
-    void savePeopleJson(const Array<float>& keypoints,
-                        const std::vector<std::vector<std::array<float,3>>>& candidates,
-                        const std::string& keypointName, const std::string& fileName,
-                        const bool humanReadable)
+    void savePeopleJson(
+        const Array<float>& keypoints, const std::vector<std::vector<std::array<float,3>>>& candidates,
+        const std::string& keypointName, const std::string& fileName, const bool humanReadable)
     {
         try
         {
             savePeopleJson(
-                std::vector<std::pair<Array<float>, std::string>>{std::make_pair(keypoints, keypointName)}, candidates,
-                fileName, humanReadable
+                std::vector<std::pair<Array<float>, std::string>>{std::make_pair(keypoints, keypointName)},
+                candidates, fileName, humanReadable
             );
         }
         catch (const std::exception& e)
@@ -300,16 +303,18 @@ namespace op
         }
     }
 
-    void savePeopleJson(const std::vector<std::pair<Array<float>, std::string>>& keypointVector,
-                        const std::vector<std::vector<std::array<float,3>>>& candidates,
-                        const std::string& fileName, const bool humanReadable)
+    void savePeopleJson(
+        const std::vector<std::pair<Array<float>, std::string>>& keypointVector,
+        const std::vector<std::vector<std::array<float,3>>>& candidates, const std::string& fileName,
+        const bool humanReadable)
     {
         try
         {
-            // Security checks
+            // Sanity check
             for (const auto& keypointPair : keypointVector)
-                if (!keypointPair.first.empty() && keypointPair.first.getNumberDimensions() != 3 )
-                    error("keypointVector.getNumberDimensions() != 3.", __LINE__, __FUNCTION__, __FILE__);
+                if (!keypointPair.first.empty() && keypointPair.first.getNumberDimensions() != 3
+                    && keypointPair.first.getNumberDimensions() != 1)
+                    error("keypointVector.getNumberDimensions() != 1 && != 3.", __LINE__, __FUNCTION__, __FILE__);
             // Record frame on desired path
             JsonOfstream jsonOfstream{fileName, humanReadable};
             jsonOfstream.objectOpen();
@@ -318,7 +323,8 @@ namespace op
             // Version 1.0: Added face and hands (2-D)
             // Version 1.1: Added candidates
             // Version 1.2: Added body, face, and hands (3-D)
-            jsonOfstream.version("1.2");
+            // Version 1.3: Added person ID (for temporal consistency)
+            jsonOfstream.version("1.3");
             jsonOfstream.comma();
             // Add people keypoints
             addKeypointsToJson(jsonOfstream, keypointVector);
@@ -337,11 +343,12 @@ namespace op
         }
     }
 
-    void saveImage(const cv::Mat& cvMat, const std::string& fullFilePath,
+    void saveImage(const Matrix& matrix, const std::string& fullFilePath,
                    const std::vector<int>& openCvCompressionParams)
     {
         try
         {
+            const cv::Mat cvMat = OP_OP2CVCONSTMAT(matrix);
             if (!cv::imwrite(fullFilePath, cvMat, openCvCompressionParams))
                 error("Image could not be saved on " + fullFilePath + ".", __LINE__, __FUNCTION__, __FILE__);
         }
@@ -351,19 +358,19 @@ namespace op
         }
     }
 
-    cv::Mat loadImage(const std::string& fullFilePath, const int openCvFlags)
+    Matrix loadImage(const std::string& fullFilePath, const int openCvFlags)
     {
         try
         {
             cv::Mat cvMat = cv::imread(fullFilePath, openCvFlags);
             if (cvMat.empty())
-                log("Empty image on path: " + fullFilePath + ".", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
-            return cvMat;
+                opLog("Empty image on path: " + fullFilePath + ".", Priority::Max, __LINE__, __FUNCTION__, __FILE__);
+            return OP_CV2OPMAT(cvMat);
         }
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-            return cv::Mat();
+            return Matrix();
         }
     }
 

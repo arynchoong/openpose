@@ -1,8 +1,8 @@
+#include <openpose/face/faceDetector.hpp>
 #include <openpose/pose/poseParameters.hpp>
 #include <openpose/utilities/check.hpp>
 #include <openpose/utilities/keypoint.hpp>
-#include <openpose/face/faceDetector.hpp>
- 
+
 namespace op
 {
     FaceDetector::FaceDetector(const PoseModel poseModel) :
@@ -12,6 +12,10 @@ namespace op
         mREar{poseBodyPartMapStringToKey(poseModel, std::vector<std::string>{"REar", "Head"})},
         mLEye{poseBodyPartMapStringToKey(poseModel, std::vector<std::string>{"LEye", "Head"})},
         mREye{poseBodyPartMapStringToKey(poseModel, std::vector<std::string>{"REye", "Head"})}
+    {
+    }
+
+    FaceDetector::~FaceDetector()
     {
     }
 
@@ -35,7 +39,7 @@ namespace op
             const auto rEyeScoreAbove = (posePtr[rEye*3+2] > threshold);
 
             auto counter = 0;
-            // Face and neck given (e.g. MPI)
+            // Face and neck given (e.g., MPI)
             if (headNose == lEar && lEar == rEar)
             {
                 if (neckScoreAbove && headNoseScoreAbove)
@@ -45,13 +49,13 @@ namespace op
                     faceSize = 1.33f * getDistance(poseKeypoints, personIndex, neck, headNose);
                 }
             }
-            // Face as average between different body keypoints (e.g. COCO)
+            // Face as average between different body keypoints (e.g., COCO)
             else
             {
                 // factor * dist(neck, headNose)
                 if (neckScoreAbove && headNoseScoreAbove)
                 {
-                    // If profile (i.e. only 1 eye and ear visible) --> avg(headNose, eye & ear position)
+                    // If profile (i.e., only 1 eye and ear visible) --> avg(headNose, eye & ear position)
                     if ((lEyeScoreAbove) == (lEarScoreAbove)
                         && (rEyeScoreAbove) == (rEarScoreAbove)
                         && (lEyeScoreAbove) != (rEyeScoreAbove))

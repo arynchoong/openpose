@@ -1,17 +1,16 @@
 #ifndef OPENPOSE_FACE_FACE_EXTRACTOR_CAFFE_HPP
 #define OPENPOSE_FACE_FACE_EXTRACTOR_CAFFE_HPP
 
-#include <opencv2/core/core.hpp> // cv::Mat
 #include <openpose/core/common.hpp>
 #include <openpose/core/enumClasses.hpp>
-#include <openpose/face/faceExtractor.hpp>
+#include <openpose/face/faceExtractorNet.hpp>
 
 namespace op
 {
     /**
      * Face keypoint extractor class for Caffe framework.
      */
-    class OP_API FaceExtractorCaffe : public FaceExtractor
+    class OP_API FaceExtractorCaffe : public FaceExtractorNet
     {
     public:
         /**
@@ -22,7 +21,7 @@ namespace op
         FaceExtractorCaffe(const Point<int>& netInputSize, const Point<int>& netOutputSize,
                            const std::string& modelFolder, const int gpuId,
                            const std::vector<HeatMapType>& heatMapTypes = {},
-                           const ScaleMode heatMapScale = ScaleMode::ZeroToOne,
+                           const ScaleMode heatMapScaleMode = ScaleMode::ZeroToOneFixedAspect,
                            const bool enableGoogleLogging = true);
 
         virtual ~FaceExtractorCaffe();
@@ -38,13 +37,10 @@ namespace op
          * @param faceRectangles location of the faces in the image. It is a length-variable std::vector, where
          * each index corresponds to a different person in the image. Internally, a op::Rectangle<float>
          * (similar to cv::Rect for floating values) with the position of that face (or 0,0,0,0 if
-         * some face is missing, e.g. if a specific person has only half of the body inside the image).
-         * @param cvInputData Original image in cv::Mat format and BGR format.
-         * @param scaleInputToOutput Desired scale of the final keypoints. Set to 1 if the desired size is the
-         * cvInputData size.
+         * some face is missing, e.g., if a specific person has only half of the body inside the image).
+         * @param cvInputData Original image in Mat format and BGR format.
          */
-        void forwardPass(const std::vector<Rectangle<float>>& faceRectangles, const cv::Mat& cvInputData,
-                         const double scaleInputToOutput);
+        void forwardPass(const std::vector<Rectangle<float>>& faceRectangles, const Matrix& inputData);
 
     private:
         // PIMPL idiom

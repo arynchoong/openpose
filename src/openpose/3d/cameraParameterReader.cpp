@@ -1,68 +1,85 @@
-﻿#include <openpose/filestream/fileStream.hpp>
 #include <openpose/3d/cameraParameterReader.hpp>
+#include <openpose_private/utilities/openCvMultiversionHeaders.hpp> // OPEN_CV_IS_4_OR_HIGHER
+#ifdef OPEN_CV_IS_4_OR_HIGHER
+    #include <opencv2/calib3d.hpp> // cv::initUndistortRectifyMap in OpenCV 4
+#endif
+#include <opencv2/imgproc/imgproc.hpp> // cv::initUndistortRectifyMap (OpenCV <= 3), cv::undistort
+#include <openpose/filestream/fileStream.hpp>
+#include <openpose/utilities/fileSystem.hpp>
 
 namespace op
 {
-    // // User configurable parameters
-    // // Camera matrices (extrinsic parameters) - rotation and pose orientation between cameras
-    // // Camera 1
-    // const cv::Mat M_1_1 = (cv::Mat_<double>(3, 4) << 1, 0, 0, 0,
-    //     0, 1, 0, 0,
-    //     0, 0, 1, 0);
-    // // Not working on Windows
-    // // const cv::Mat M_1_1 = cv::Mat::eye(3, 4, CV_64F);
-    // // From camera 1 to 2
-    // const cv::Mat M_1_2 = (cv::Mat_<double>(3, 4)
-    //     << 0.999962504862692, -0.00165862051503619, 0.00849928507093793, -238.301309354482,
-    //     0.00176155163779584, 0.999925029704659, -0.0121174215889211, 4.75863886121558,
-    //     -0.00847854967298925, 0.0121319391740716, 0.999890459124058, 15.9219925821916);
-    // // From camera 1 to 3
-    // const cv::Mat M_1_3 = (cv::Mat_<double>(3, 4)
-    //     << 0.995809442124071, -0.000473104796892308, 0.0914512501193800, -461.301274485705,
-    //     0.00165046455210419, 0.999916727562850, -0.0127989806923977, 6.22648121362088,
-    //     -0.0914375794917412, 0.0128962828696210, 0.995727299487585, 63.4911132860733);
-    // // From camera 2 to 3
-    // const cv::Mat M_2_3 = (cv::Mat_<double>(3, 4)
-    //     << 0.999644115423621, -0.00194501088674130, -0.0266056278177532, -235.236375502202,
-    //     0.00201646110733780, 0.999994431880356, 0.00265896462686206, 9.52238656728889,
-    //     0.0266003079592876, -0.00271166755609303, 0.999642471324391, -4.23534963077479);
-
-    // // Intrinsic and distortion parameters
-    // // Camera 1 parameters
-    // const cv::Mat INTRINSIC_1 = (cv::Mat_<double>(3, 3) << 817.93481631740565, 0, 600.70689997785121,
-    //     0, 816.51774059837908, 517.84529566329593,
-    //     0, 0, 1);
-    // const cv::Mat DISTORTION_1 = (cv::Mat_<double>(8, 1) <<
-    //     -1.8102158829399091, 9.1966147162623262, -0.00044293900343777355, 0.0013638377686816653,
-    //     1.3303863414979364, -1.418905163635487, 8.4725535468475819, 4.7911023525901033);
-    // // Camera 2 parameters
-    // const cv::Mat INTRINSIC_2 = (cv::Mat_<double>(3, 3) << 816.20921132436638, 0, 612.67087968681585,
-    //     0, 816.18292222910486, 530.47901782670431,
-    //     0, 0, 1);
-    // const cv::Mat DISTORTION_2 = (cv::Mat_<double>(8, 1) <<
-    //     -5.1088507540294881, 133.63995617304997, -0.0010048069080912836, 0.00018825291386406282,
-    //     20.688286893903879, -4.7604289550474768, 132.42412342224557, 70.01195364029752);
-    // const cv::Mat INTRINSIC_3 = (cv::Mat_<double>(3, 3) << 798.42980806905666, 0, 646.48130011561727,
-    //     0, 798.46535448393979, 523.91590563194586,
-    //     0, 0, 1);
-    // // Camera 3
-    // const cv::Mat DISTORTION_3 = (cv::Mat_<double>(8, 1) <<
-    //     -0.57530495294002304, -0.54721992620722582, -0.00037614702677289967, -0.00081995658363481598,
-    //     -0.020321660897680775, -0.18040544059116842, -0.87724444571603022, -0.13136636671099691);
-
-    // // Do not modify this code
-    // const std::vector<cv::Mat> INTRINSICS{ INTRINSIC_1, INTRINSIC_2, INTRINSIC_3 };
-    // const std::vector<cv::Mat> DISTORTIONS{ DISTORTION_1, DISTORTION_2, DISTORTION_3 };
-    // const std::vector<cv::Mat> M{ M_1_1, M_1_2, M_1_3 };
-    // // Not working on Windows
-    // // const std::vector<cv::Mat> M_EACH_CAMERA{
-    // //     INTRINSIC_1 * M_1_1,
-    // //     INTRINSIC_2 * M_1_2,
-    // //     INTRINSIC_3 * M_1_3
-    // // };
-
-    CameraParameterReader::CameraParameterReader()
+    struct CameraParameterReader::ImplCameraParameterReader
     {
+        std::vector<std::string> mSerialNumbers;
+        std::vector<Matrix> mCameraMatrices;
+        std::vector<Matrix> mCameraDistortions;
+        std::vector<Matrix> mCameraIntrinsics;
+        std::vector<Matrix> mCameraExtrinsics;
+        std::vector<Matrix> mCameraExtrinsicsInitial;
+
+        // Undistortion (optional)
+        bool mUndistortImage;
+        std::vector<cv::Mat> mRemoveDistortionMaps1;
+        std::vector<cv::Mat> mRemoveDistortionMaps2;
+
+        ImplCameraParameterReader(const bool undistortImage) :
+            mUndistortImage{undistortImage}
+        {
+        }
+    };
+
+    CameraParameterReader::CameraParameterReader() :
+        spImpl{std::make_shared<ImplCameraParameterReader>(false)}
+    {
+    }
+
+    CameraParameterReader::~CameraParameterReader()
+    {
+    }
+
+    CameraParameterReader::CameraParameterReader(const std::string& serialNumber,
+                                                 const Matrix& cameraIntrinsics,
+                                                 const Matrix& cameraDistortion,
+                                                 const Matrix& cameraExtrinsics,
+                                                 const Matrix& cameraExtrinsicsInitial) :
+        spImpl{std::make_shared<ImplCameraParameterReader>(false)}
+    {
+        try
+        {
+            // Sanity checks
+            if (serialNumber.empty())
+                error("Camera serialNumber cannot be empty.", __LINE__, __FUNCTION__, __FILE__);
+            if (cameraIntrinsics.empty())
+                error("Camera intrinsics cannot be empty.", __LINE__, __FUNCTION__, __FILE__);
+            if (cameraDistortion.empty())
+                error("Camera distortion cannot be empty.", __LINE__, __FUNCTION__, __FILE__);
+            // Add new matrices
+            spImpl->mSerialNumbers.emplace_back(serialNumber);
+            spImpl->mCameraIntrinsics.emplace_back(cameraIntrinsics.clone());
+            spImpl->mCameraDistortions.emplace_back(cameraDistortion.clone());
+            // Add extrinsics if not empty
+            if (!cameraExtrinsics.empty())
+                spImpl->mCameraExtrinsics.emplace_back(cameraExtrinsics.clone());
+            else
+                spImpl->mCameraExtrinsics.emplace_back(Matrix::eye(3, 4, cameraIntrinsics.type()));
+            // Add extrinsics (initial) if not empty
+            if (!cameraExtrinsicsInitial.empty())
+                spImpl->mCameraExtrinsicsInitial.emplace_back(cameraExtrinsicsInitial.clone());
+            // Otherwise, add cv::eye
+            else
+                spImpl->mCameraExtrinsicsInitial.emplace_back(Matrix::eye(3, 4, cameraIntrinsics.type()));;
+            const cv::Mat cvCameraMatrices = OP_OP2CVCONSTMAT(spImpl->mCameraIntrinsics.back()) * OP_OP2CVCONSTMAT(spImpl->mCameraExtrinsics.back());
+            const Matrix opCameraMatrices = OP_CV2OPCONSTMAT(cvCameraMatrices);
+            spImpl->mCameraMatrices.emplace_back(opCameraMatrices);
+            // Undistortion Mats
+            spImpl->mRemoveDistortionMaps1.resize(getNumberCameras());
+            spImpl->mRemoveDistortionMaps2.resize(getNumberCameras());
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
     }
 
     void CameraParameterReader::readParameters(const std::string& cameraParameterPath,
@@ -71,59 +88,39 @@ namespace op
         try
         {
             // Serial numbers
-            mSerialNumbers = serialNumbers;
+            if (serialNumbers.empty())
+            {
+                spImpl->mSerialNumbers = getFilesOnDirectory(cameraParameterPath, "xml");
+                for (auto& serialNumber : spImpl->mSerialNumbers)
+                    serialNumber = getFileNameNoExtension(serialNumber);
+            }
+            else
+                spImpl->mSerialNumbers = serialNumbers;
 
             // Commong saving/loading
-            const std::string fileNameNoExtension{cameraParameterPath};
             const auto dataFormat = DataFormat::Xml;
             const std::vector<std::string> cvMatNames {
-                "CameraMatrix", "Intrinsics", "Distortion"
+                "CameraMatrix", "Intrinsics", "Distortion", "CameraMatrixInitial"
             };
 
-            // // Temporary code to save the parameters in disk
-            // // #cameras
-            // mNumberCameras = INTRINSICS.size();
-            // // Camera matrices
-            // mCameraMatrices.resize(mNumberCameras);
-            // for (auto i = 0ull ; i < mNumberCameras ; i++)
-            //     mCameraMatrices[i] = INTRINSICS.at(i) * M.at(i);
-            //     // Not working on Windows
-            //     // mCameraMatrices[i] = M_EACH_CAMERA.at(i);
-            // // Camera intrinsics
-            // mCameraIntrinsics.resize(mNumberCameras);
-            // for (auto i = 0ull ; i < mNumberCameras ; i++)
-            //     mCameraIntrinsics[i] = INTRINSICS.at(i);
-            // // Camera extrinsics
-            // mCameraDistortions.resize(mNumberCameras);
-            // for (auto i = 0ull ; i < mNumberCameras ; i++)
-            //     mCameraDistortions[i] = DISTORTIONS.at(i);
-
-            // // Saving
-            // for (auto i = 0ull ; i < mNumberCameras ; i++)
-            // {
-            //     std::vector<cv::Mat> cameraParameters;
-            //     cameraParameters.emplace_back(M.at(i));
-            //     cameraParameters.emplace_back(mCameraIntrinsics.at(i));
-            //     cameraParameters.emplace_back(mCameraDistortions.at(i));
-            //     saveData(cameraParameters, cvMatNames, fileNameNoExtension + mSerialNumbers.at(i), dataFormat);
-            // }
-
             // Load parameters
-            mNumberCameras = serialNumbers.size();
-            mCameraMatrices.clear();
-            mCameraIntrinsics.clear();
-            mCameraDistortions.clear();
-            // log("Camera matrices:");
-            for (auto i = 0ull ; i < mNumberCameras ; i++)
+            spImpl->mCameraMatrices.clear();
+            spImpl->mCameraDistortions.clear();
+            spImpl->mCameraIntrinsics.clear();
+            spImpl->mCameraExtrinsics.clear();
+            spImpl->mCameraExtrinsicsInitial.clear();
+            // opLog("Camera matrices:");
+            for (auto i = 0ull ; i < spImpl->mSerialNumbers.size() ; i++)
             {
-                const auto parameterPath = fileNameNoExtension + mSerialNumbers.at(i);
-                const auto cameraParameters = loadData(cvMatNames, parameterPath, dataFormat);
-                const auto& intrinsics = cameraParameters.at(1);
+                const auto parameterPath = cameraParameterPath + spImpl->mSerialNumbers.at(i);
+                const auto opCameraParameters = loadData(cvMatNames, parameterPath, dataFormat);
+                OP_OP2CVVECTORMAT(cameraParameters, opCameraParameters)
                 // Error if empty element
                 if (cameraParameters.empty() || cameraParameters.at(0).empty()
-                    || cameraParameters.at(1).empty() || cameraParameters.at(2).empty())
+                    || cameraParameters.at(1).empty() || cameraParameters.at(2).empty()
+                    || cameraParameters.at(3).empty())
                 {
-                    const std::string errorMessage = " of the camera with serial number `" + mSerialNumbers[i]
+                    const std::string errorMessage = " of the camera with serial number `" + spImpl->mSerialNumbers[i]
                                                    + "` (file: " + parameterPath + "." + dataFormatToString(dataFormat)
                                                    + "). Is its format valid? You might want to check the example xml"
                                                    + " file.";
@@ -139,24 +136,81 @@ namespace op
                     if (cameraParameters.at(2).empty())
                         error("Error at reading the camera distortion parameters" + errorMessage,
                               __LINE__, __FUNCTION__, __FILE__);
+                    // Commented for back-compatibility
+                    // if (cameraParameters.at(3).empty())
+                    //     error("Error at reading the camera distortion parameters" + errorMessage,
+                    //           __LINE__, __FUNCTION__, __FILE__);
                 }
-                mCameraMatrices.emplace_back(intrinsics * cameraParameters.at(0));
-                mCameraIntrinsics.emplace_back(intrinsics);
-                mCameraDistortions.emplace_back(cameraParameters.at(2));
-                // log(cameraParameters.at(0));
+                spImpl->mCameraExtrinsics.emplace_back(opCameraParameters.at(0));
+                spImpl->mCameraIntrinsics.emplace_back(opCameraParameters.at(1));
+                spImpl->mCameraDistortions.emplace_back(opCameraParameters.at(2));
+                spImpl->mCameraExtrinsicsInitial.emplace_back(opCameraParameters.at(3));
+                const cv::Mat cvCameraMatrices = OP_OP2CVCONSTMAT(spImpl->mCameraIntrinsics.back()) * OP_OP2CVCONSTMAT(spImpl->mCameraExtrinsics.back());
+                const Matrix opCameraMatrices = OP_CV2OPCONSTMAT(cvCameraMatrices);
+                spImpl->mCameraMatrices.emplace_back(opCameraMatrices);
+                // opLog(cameraParameters.at(0));
             }
-            // // mCameraMatrices
-            // log("\nFull camera matrices:");
-            // for (const auto& cvMat : mCameraMatrices)
-            //     log(cvMat);
-            // // mCameraIntrinsics
-            // log("\nCamera intrinsic parameters:");
-            // for (const auto& cvMat : mCameraIntrinsics)
-            //     log(cvMat);
-            // // mCameraDistortions
-            // log("\nCamera distortion parameters:");
-            // for (const auto& cvMat : mCameraDistortions)
-            //     log(cvMat);
+            // Undistortion Mats
+            spImpl->mRemoveDistortionMaps1.resize(getNumberCameras());
+            spImpl->mRemoveDistortionMaps2.resize(getNumberCameras());
+            // // spImpl->mCameraMatrices
+            // opLog("\nFull camera matrices:");
+            // for (const auto& cvMat : spImpl->mCameraMatrices)
+            //     opLog(cvMat);
+            // // spImpl->mCameraIntrinsics
+            // opLog("\nCamera intrinsic parameters:");
+            // for (const auto& cvMat : spImpl->mCameraIntrinsics)
+            //     opLog(cvMat);
+            // // spImpl->mCameraDistortions
+            // opLog("\nCamera distortion parameters:");
+            // for (const auto& cvMat : spImpl->mCameraDistortions)
+            //     opLog(cvMat);
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
+    }
+
+    void CameraParameterReader::readParameters(const std::string& cameraParameterPath,
+                                               const std::string& serialNumber)
+    {
+        try
+        {
+            readParameters(cameraParameterPath, std::vector<std::string>{serialNumber});
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
+    }
+
+    void CameraParameterReader::writeParameters(const std::string& cameraParameterPath) const
+    {
+        try
+        {
+            // Sanity check
+            if (spImpl->mSerialNumbers.size() != spImpl->mCameraIntrinsics.size()
+                || spImpl->mSerialNumbers.size() != spImpl->mCameraDistortions.size()
+                || (spImpl->mSerialNumbers.size() != spImpl->mCameraIntrinsics.size()
+                    && !spImpl->mCameraExtrinsics.empty()))
+                error("Arguments must have same size (spImpl->mSerialNumbers, spImpl->mCameraIntrinsics, spImpl->mCameraDistortions,"
+                      " and spImpl->mCameraExtrinsics).", __LINE__, __FUNCTION__, __FILE__);
+            // Commong saving/loading
+            const auto dataFormat = DataFormat::Xml;
+            const std::vector<std::string> cvMatNames {
+                "CameraMatrix", "Intrinsics", "Distortion", "CameraMatrixInitial"
+            };
+            // Saving
+            for (auto i = 0ull ; i < spImpl->mSerialNumbers.size() ; i++)
+            {
+                std::vector<Matrix> cameraParameters;
+                cameraParameters.emplace_back(spImpl->mCameraExtrinsics[i]);
+                cameraParameters.emplace_back(spImpl->mCameraIntrinsics[i]);
+                cameraParameters.emplace_back(spImpl->mCameraDistortions[i]);
+                cameraParameters.emplace_back(spImpl->mCameraExtrinsicsInitial[i]);
+                saveData(cameraParameters, cvMatNames, cameraParameterPath + spImpl->mSerialNumbers[i], dataFormat);
+            }
         }
         catch (const std::exception& e)
         {
@@ -168,7 +222,7 @@ namespace op
     {
         try
         {
-            return mNumberCameras;
+            return spImpl->mSerialNumbers.size();
         }
         catch (const std::exception& e)
         {
@@ -177,42 +231,170 @@ namespace op
         }
     }
 
-    const std::vector<cv::Mat>& CameraParameterReader::getCameraMatrices() const
+    const std::vector<std::string>& CameraParameterReader::getCameraSerialNumbers() const
     {
         try
         {
-            return mCameraMatrices;
+            return spImpl->mSerialNumbers;
         }
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-            return mCameraMatrices;
+            return spImpl->mSerialNumbers;
         }
     }
 
-    const std::vector<cv::Mat>& CameraParameterReader::getCameraIntrinsics() const
+    const std::vector<Matrix>& CameraParameterReader::getCameraMatrices() const
     {
         try
         {
-            return mCameraIntrinsics;
+            return spImpl->mCameraMatrices;
         }
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-            return mCameraIntrinsics;
+            return spImpl->mCameraMatrices;
         }
     }
 
-    const std::vector<cv::Mat>& CameraParameterReader::getCameraDistortions() const
+    const std::vector<Matrix>& CameraParameterReader::getCameraDistortions() const
     {
         try
         {
-            return mCameraDistortions;
+            return spImpl->mCameraDistortions;
         }
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-            return mCameraDistortions;
+            return spImpl->mCameraDistortions;
+        }
+    }
+
+    const std::vector<Matrix>& CameraParameterReader::getCameraIntrinsics() const
+    {
+        try
+        {
+            return spImpl->mCameraIntrinsics;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return spImpl->mCameraIntrinsics;
+        }
+    }
+
+    const std::vector<Matrix>& CameraParameterReader::getCameraExtrinsics() const
+    {
+        try
+        {
+            return spImpl->mCameraExtrinsics;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return spImpl->mCameraExtrinsics;
+        }
+    }
+
+    const std::vector<Matrix>& CameraParameterReader::getCameraExtrinsicsInitial() const
+    {
+        try
+        {
+            return spImpl->mCameraExtrinsicsInitial;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return spImpl->mCameraExtrinsicsInitial;
+        }
+    }
+
+    bool CameraParameterReader::getUndistortImage() const
+    {
+        try
+        {
+            return spImpl->mUndistortImage;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+            return false;
+        }
+    }
+
+    void CameraParameterReader::setUndistortImage(const bool undistortImage)
+    {
+        try
+        {
+            spImpl->mUndistortImage = undistortImage;
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
+        }
+    }
+
+    void CameraParameterReader::undistort(Matrix& frame, const unsigned int cameraIndex)
+    {
+        try
+        {
+            if (spImpl->mUndistortImage)
+            {
+                // Sanity check
+                if (spImpl->mRemoveDistortionMaps1.size() <= cameraIndex
+                    || spImpl->mRemoveDistortionMaps2.size() <= cameraIndex)
+                {
+                    error("Variable cameraIndex is out of bounds, it should be smaller than spImpl->mRemoveDistortionMapsX.",
+                          __LINE__, __FUNCTION__, __FILE__);
+                }
+                // Only first time
+                if (spImpl->mRemoveDistortionMaps1[cameraIndex].empty()
+                    || spImpl->mRemoveDistortionMaps2[cameraIndex].empty())
+                {
+                    const auto cvCameraIntrinsics = OP_OP2CVCONSTMAT(spImpl->mCameraIntrinsics.at(0));
+                    const auto cvCameraDistorsions = OP_OP2CVCONSTMAT(spImpl->mCameraDistortions.at(0));
+                    //const auto imageSize = OP_OP2CVMAT(frame).size();
+                    cv::Size imageSize;
+                    OP_CONST_MAT_RETURN_FUNCTION(imageSize, frame, size()); // = frame.size();
+                    // // Option a - 80 ms / 3 images
+                    // // http://docs.opencv.org/2.4/modules/imgproc/doc/geometric_transformations.html#undistort
+                    // cv::undistort(cvMatDistorted, mCvMats[i], cvCameraIntrinsics, cvCameraDistorsions);
+                    // // In OpenCV 2.4, cv::undistort is exactly equal than cv::initUndistortRectifyMap
+                    // (with CV_16SC2) + cv::remap (with LINEAR). I.e., opLog(cv::norm(cvMatMethod1-cvMatMethod2)) = 0.
+                    // Option b - 15 ms / 3 images (LINEAR) or 25 ms (CUBIC)
+                    // Distorsion removal - not required and more expensive (applied to the whole image instead of
+                    // only to our interest points)
+                    cv::initUndistortRectifyMap(
+                        cvCameraIntrinsics, cvCameraDistorsions, cv::Mat(),
+                        // cvCameraIntrinsics instead of cv::getOptimalNewCameraMatrix to
+                        // avoid black borders
+                        cvCameraIntrinsics,
+                        // #include <opencv2/calib3d/calib3d.hpp> for next line
+                        // cv::getOptimalNewCameraMatrix(cvCameraIntrinsics,
+                        //                               cvCameraDistorsions,
+                        //                               imageSize, 1,
+                        //                               imageSize, 0),
+                        imageSize,
+                        CV_16SC2, // Faster, less memory
+                        // CV_32FC1, // More accurate
+                        spImpl->mRemoveDistortionMaps1[cameraIndex],
+                        spImpl->mRemoveDistortionMaps2[cameraIndex]);
+                }
+                cv::Mat undistortedCvMat;
+                const cv::Mat cvFrame = OP_OP2CVCONSTMAT(frame);
+                cv::remap(cvFrame, undistortedCvMat,
+                          spImpl->mRemoveDistortionMaps1[cameraIndex], spImpl->mRemoveDistortionMaps2[cameraIndex],
+                          // cv::INTER_NEAREST);
+                          cv::INTER_LINEAR);
+                          // cv::INTER_CUBIC);
+                          // cv::INTER_LANCZOS4); // Smoother, but we do not need this quality & its >>expensive
+                Matrix opUndistortedCvMat = OP_CV2OPMAT(undistortedCvMat);
+                std::swap(opUndistortedCvMat, frame);
+            }
+        }
+        catch (const std::exception& e)
+        {
+            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
         }
     }
 }

@@ -11,9 +11,12 @@ namespace op
     public:
         PeopleJsonSaver(const std::string& directoryPath);
 
-        void save(const std::vector<std::pair<Array<float>, std::string>>& keypointVector,
-                  const std::vector<std::vector<std::array<float,3>>>& candidates,
-                  const std::string& fileName, const bool humanReadable = true) const;
+        virtual ~PeopleJsonSaver();
+
+        void save(
+            const std::vector<std::pair<Array<float>, std::string>>& keypointVector,
+            const std::vector<std::vector<std::array<float,3>>>& candidates, const std::string& fileName,
+            const bool humanReadable = true) const;
     };
 }
 

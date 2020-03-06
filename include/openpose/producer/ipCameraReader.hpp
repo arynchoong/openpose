@@ -16,11 +16,17 @@ namespace op
          * Constructor of IpCameraReader. It opens the IP camera as a wrapper of cv::VideoCapture.
          * @param cameraPath const std::string parameter with the full camera IP link.
          */
-        explicit IpCameraReader(const std::string& cameraPath);
+        explicit IpCameraReader(const std::string& cameraPath, const std::string& cameraParameterPath = "",
+                                const bool undistortImage = false);
 
-        std::vector<cv::Mat> getCameraMatrices();
+        virtual ~IpCameraReader();
 
         std::string getNextFrameName();
+
+        inline bool isOpened() const
+        {
+            return VideoCaptureReader::isOpened();
+        }
 
         inline double get(const int capProperty)
         {
@@ -35,9 +41,9 @@ namespace op
     private:
         const std::string mPathName;
 
-        cv::Mat getRawFrame();
+        Matrix getRawFrame();
 
-        std::vector<cv::Mat> getRawFrames();
+        std::vector<Matrix> getRawFrames();
 
         DELETE_COPY(IpCameraReader);
     };

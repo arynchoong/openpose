@@ -13,6 +13,8 @@ namespace op
     public:
         explicit WImageSaver(const std::shared_ptr<ImageSaver>& imageSaver);
 
+        virtual ~WImageSaver();
+
         void initializationOnThread();
 
         void workConsumer(const TDatums& tDatums);
@@ -39,6 +41,11 @@ namespace op
     }
 
     template<typename TDatums>
+    WImageSaver<TDatums>::~WImageSaver()
+    {
+    }
+
+    template<typename TDatums>
     void WImageSaver<TDatums>::initializationOnThread()
     {
     }
@@ -51,22 +58,23 @@ namespace op
             if (checkNoNullNorEmpty(tDatums))
             {
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
                 // Profiling speed
                 const auto profilerKey = Profiler::timerInit(__LINE__, __FUNCTION__, __FILE__);
                 // T* to T
                 auto& tDatumsNoPtr = *tDatums;
                 // Record image(s) on disk
-                std::vector<cv::Mat> cvOutputDatas(tDatumsNoPtr.size());
+                std::vector<Matrix> opOutputDatas(tDatumsNoPtr.size());
                 for (auto i = 0u; i < tDatumsNoPtr.size(); i++)
-                    cvOutputDatas[i] = tDatumsNoPtr[i].cvOutputData;
-                const auto fileName = (!tDatumsNoPtr[0].name.empty() ? tDatumsNoPtr[0].name : std::to_string(tDatumsNoPtr[0].id));
-                spImageSaver->saveImages(cvOutputDatas, fileName);
+                    opOutputDatas[i] = tDatumsNoPtr[i]->cvOutputData;
+                const auto fileName = (!tDatumsNoPtr[0]->name.empty()
+                    ? tDatumsNoPtr[0]->name : std::to_string(tDatumsNoPtr[0]->id));
+                spImageSaver->saveImages(opOutputDatas, fileName);
                 // Profiling speed
                 Profiler::timerEnd(profilerKey);
                 Profiler::printAveragedTimeMsOnIterationX(profilerKey, __LINE__, __FUNCTION__, __FILE__);
                 // Debugging log
-                dLog("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
+                opLogIfDebug("", Priority::Low, __LINE__, __FUNCTION__, __FILE__);
             }
         }
         catch (const std::exception& e)

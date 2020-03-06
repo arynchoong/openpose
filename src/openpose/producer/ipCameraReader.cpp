@@ -6,23 +6,15 @@ namespace op
     // http://iris.not.iac.es/axis-cgi/mjpg/video.cgi?resolution=320x240?x.mjpeg
     // http://www.webcamxp.com/publicipcams.aspx
 
-    IpCameraReader::IpCameraReader(const std::string & cameraPath) :
-        VideoCaptureReader{cameraPath, ProducerType::IPCamera},
+    IpCameraReader::IpCameraReader(const std::string & cameraPath, const std::string& cameraParameterPath,
+                                   const bool undistortImage) :
+        VideoCaptureReader{cameraPath, ProducerType::IPCamera, cameraParameterPath, undistortImage, 1},
         mPathName{cameraPath}
     {
     }
 
-    std::vector<cv::Mat> IpCameraReader::getCameraMatrices()
+    IpCameraReader::~IpCameraReader()
     {
-        try
-        {
-            return {};
-        }
-        catch (const std::exception& e)
-        {
-            error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-            return {};
-        }
     }
 
     std::string IpCameraReader::getNextFrameName()
@@ -38,7 +30,7 @@ namespace op
         }
     }
 
-    cv::Mat IpCameraReader::getRawFrame()
+    Matrix IpCameraReader::getRawFrame()
     {
         try
         {
@@ -47,11 +39,11 @@ namespace op
         catch (const std::exception& e)
         {
             error(e.what(), __LINE__, __FUNCTION__, __FILE__);
-            return cv::Mat();
+            return Matrix();
         }
     }
 
-    std::vector<cv::Mat> IpCameraReader::getRawFrames()
+    std::vector<Matrix> IpCameraReader::getRawFrames()
     {
         try
         {
